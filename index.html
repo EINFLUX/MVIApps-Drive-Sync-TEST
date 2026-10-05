@@ -6543,6 +6543,9 @@ function driveSyncAuthMsg(text, cls=''){
 function driveSyncSetButtons(enabled){
   ['driveSyncNowBtn','driveSyncUploadBtn','driveSyncDownloadBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.disabled=!enabled;});
 }
+async function driveSyncYieldForUi(){
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
 function driveSyncSetBusy(busy, message=''){
   const ids=['driveSyncNowBtn','driveSyncUploadBtn','driveSyncDownloadBtn'];
   ids.forEach(id=>{const e=document.getElementById(id);if(e)e.disabled=busy||!mviDriveSyncToken;});
@@ -6644,14 +6647,16 @@ async function driveSyncRestoreData(data){
   const cleanItems=[];for(const item of backupItems){if(!item||typeof item!=='object')continue;const copy={...item},img=copy.image;delete copy.image;if(img&&typeof img==='string'&&img.startsWith('data:image')){await putMVIItemImage(copy.id,img);copy.imageKey=String(copy.id);}else if(copy.imageKey){copy.imageKey=String(copy.imageKey);}cleanItems.push(copy);}localStorage.setItem('mviapps_items',JSON.stringify(cleanItems));
 }
 async function driveSyncDownloadCloud(force=false){
-  driveSyncSetBusy(true,'Google Drive se data download ho raha hai… कृपया प्रतीक्षा करें। Page को refresh या बंद न करें।');
+  driveSyncSetBusy(true,'Downloading data from Google Drive... Please wait. Do not refresh or close this page.');
+  await driveSyncYieldForUi();
   try{const found=await driveSyncRefreshCloud();if(!found){driveSyncMsg('No cloud data is available yet.','err');return;}if(!force&&!confirm('This will replace the MVIApps data on THIS TEST DEVICE with the cloud snapshot. A backup is strongly recommended first. Continue?'))return;
     await driveSyncRestoreData(found.snapshot.data);const after=await driveSyncBuildLocal();driveSyncSaveState(found.cloudRevision,after.hash);const h=document.getElementById('driveSyncLastHash');if(h)h.value=found.cloudRevision;driveSyncMsg('Cloud data loaded successfully. MVIApps will reload now.','ok');setTimeout(()=>location.reload(),700);
   }catch(e){console.error(e);driveSyncMsg('Cloud download failed: '+(e.message||String(e)),'err');}
   finally{driveSyncSetBusy(false);}
 }
 async function driveSyncUploadLocal(force=false){
-  driveSyncSetBusy(true,'Google Drive par local data upload ho raha hai… कृपया प्रतीक्षा करें। Page को refresh या बंद न करें।');
+  driveSyncSetBusy(true,'Uploading local data to Google Drive... Please wait. Do not refresh or close this page.');
+  await driveSyncYieldForUi();
   try{const found=await driveSyncRefreshCloud();const local=await driveSyncBuildLocal();if(!found){const created=await driveSyncUploadSnapshot(local.data,local.hash,null);driveSyncSaveState(created.revision,local.hash);driveSyncMsg('Local data uploaded successfully. Cloud snapshot created.','ok');await driveSyncRefreshCloud();return;}
     const lastRev=driveSyncLastCloudRevision(),lastLocal=driveSyncLastLocalHash();
     if(!lastLocal&&lastRev){driveSyncSaveState(lastRev,local.hash);}
@@ -6663,7 +6668,8 @@ async function driveSyncUploadLocal(force=false){
   finally{driveSyncSetBusy(false);}
 }
 async function driveSyncNow(){
-  driveSyncSetBusy(true,'Google Drive ke saath sync ho raha hai… कृपया प्रतीक्षा करें। Page को refresh या बंद न करें।');
+  driveSyncSetBusy(true,'Syncing with Google Drive... Please wait. Do not refresh or close this page.');
+  await driveSyncYieldForUi();
   try{const found=await driveSyncRefreshCloud();const local=await driveSyncBuildLocal();
     if(!found){const created=await driveSyncUploadSnapshot(local.data,local.hash,null);driveSyncSaveState(created.revision,local.hash);driveSyncMsg('First sync complete: local MVIApps data is now stored in the MVIApps cloud snapshot.','ok');await driveSyncRefreshCloud();return;}
     let lastRev=driveSyncLastCloudRevision(),lastLocal=driveSyncLastLocalHash();
