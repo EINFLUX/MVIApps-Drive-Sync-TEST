@@ -5030,14 +5030,11 @@ function stockTotals(item){
 }
 function getCurrentStockSnapshot(item){
   const t=stockTotals(item);
-  // Item Details > Current Stock Quantity should use the live godown-wise quantity,
-  // rather than the Financial-Year closing quantity from stockTotals().
-  let liveQty=null;
-  try{
-    const rows=getGodownStock().filter(x=>String(x.itemId)===String(item.id));
-    if(rows.length) liveQty=rows.reduce((sum,x)=>sum+(Number(x.qty)||0),0);
-  }catch(e){}
-  return {qty:liveQty===null?t.closing:Math.max(0,liveQty),value:t.stockValue};
+  // Item Details > Current Stock Quantity must follow the same stock calculation
+  // used by Stock Summary / Stock Ledger for the selected Financial Year.
+  // Do not read the cached godown balance here because it can be stale and show
+  // a smaller quantity than the calculated stock balance.
+  return {qty:t.closing,value:t.stockValue};
 }
 function renderStockSummary(){const rows=document.getElementById('stockSummaryRows');if(!rows)return;const q=(document.getElementById('stockSummarySearch')?.value||'').toLowerCase(),c=(document.getElementById('stockSummaryCategory')?.value||'').trim().toLowerCase();const items=getSortedItems().filter(x=>(!q||String(x.name||'').toLowerCase().includes(q)||String(x.code||'').toLowerCase().includes(q))&&(!c||String(x.category||'').trim().toLowerCase()===c));rows.innerHTML=items.length?items.map(x=>{const t=stockTotals(x);return `<tr><td><b>${escapeHtml(x.name||'')}</b><br><span style="font-size:11px;color:var(--muted)">${escapeHtml(x.code||x.category||'')}</span></td><td>${t.opening}</td><td>${t.purchase}</td><td>${t.sale}</td><td>${t.returns}</td><td><b>${t.closing}</b></td><td>₹ ${t.stockValue.toFixed(2)}</td></tr>`}).join(''):`<tr><td colspan="7" class="empty">No stock items found. Add items from Item Details.</td></tr>`;}
 function stockLedger(){return `<div class="page-head"><div><h1>Stock Ledger</h1><p>Item-wise opening stock and stock movement history.</p></div><div><button class="btn secondary" onclick="printStockLedger()">Print</button> <button class="btn" onclick="exportStockLedger()">Export</button></div></div><div class="panel"><div class="toolbar"><input class="input" id="stockLedgerSearch" placeholder="Search item..." oninput="renderStockLedger()"><select class="select" id="stockLedgerType" onchange="renderStockLedger()"><option value="">All Movements</option><option value="opening">Opening</option><option value="purchase">Purchase</option><option value="sale">Sale</option><option value="return">Return</option><option value="adjustment">Adjustment</option></select></div><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Reference</th><th>In Qty</th><th>Out Qty</th><th>Balance Qty</th></tr></thead><tbody id="stockLedgerRows"></tbody></table></div></div>`}
