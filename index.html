@@ -6649,8 +6649,9 @@ function driveSyncSaveState(cloudRevision,localHash){
 function driveSyncLastHash(){return localStorage.getItem('mviapps_drive_sync_last_cloud_hash')||'';}
 function driveSyncLastCloudRevision(){return localStorage.getItem('mviapps_drive_sync_last_cloud_revision')||driveSyncLastHash();}
 function driveSyncLastLocalHash(){return localStorage.getItem('mviapps_drive_sync_last_local_hash')||'';}
+const MVI_DRIVE_SYNC_BASELINE='mviapps_drive_sync_base_manifest';
 function driveSyncExcludeDataKey(k){
-  return k==='mviapps_drive_sync_last_cloud_hash'||k==='mviapps_drive_sync_last_cloud_revision'||k==='mviapps_drive_sync_last_local_hash'||k==='mviapps_drive_sync_client'||k==='mviapps_drive_sync_last_device';
+  return k==='mviapps_drive_sync_last_cloud_hash'||k==='mviapps_drive_sync_last_cloud_revision'||k==='mviapps_drive_sync_last_local_hash'||k===MVI_DRIVE_SYNC_BASELINE||k==='mviapps_drive_sync_client'||k==='mviapps_drive_sync_last_device';
 }
 async function driveSyncGetLocalSnapshot(){
   const data=await appDataWithHighStorage();
@@ -6669,7 +6670,59 @@ async function driveSyncSha256(text){
   return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 async function driveSyncHashData(data){return driveSyncSha256(JSON.stringify(driveSyncStable(data)));}
-async function driveSyncBuildLocal(){const data=await driveSyncGetLocalSnapshot();return {data,hash:await driveSyncHashData(data)};}
+async function driveSyncBuildLocal(){const data=await driveSyncGetLocalSnapshot();return {data,hash:await driveSyncHashData(data)}}
+async function driveSyncBuildBaselineManifest(data){
+  const manifest={version:1,keys:{}};
+  for(const [key,raw] of Object.entries(data||{})){
+    let parsed;try{parsed=JSON.parse(raw)}catch(e){parsed=undefined}
+    if(Array.isArray(parsed)){
+      const records={};let valid=true;const seen=new Set();
+      for(const item of parsed){
+        if(!item||typeof item!=='object'||Array.isArray(item)||item.id===undefined||item.id===null||String(item.id)===''||seen.has(String(item.id))){valid=false;break}
+        const id=String(item.id);seen.add(id);records[id]=await driveSyncHashData(item);
+      }
+      manifest.keys[key]=valid?{type:'records',records}:{type:'value',hash:await driveSyncHashData(parsed)};
+    }else manifest.keys[key]={type:'value',hash:await driveSyncHashData(parsed===undefined?(raw===undefined?null:raw):parsed)};
+  }
+  return manifest;
+}
+async function driveSyncSaveBaseline(data){localStorage.setItem(MVI_DRIVE_SYNC_BASELINE,JSON.stringify(await driveSyncBuildBaselineManifest(data)))}
+function driveSyncLoadBaseline(){try{const v=JSON.parse(localStorage.getItem(MVI_DRIVE_SYNC_BASELINE)||'null');return v&&v.version===1&&v.keys?v:null}catch(e){return null}}
+function driveSyncParseValue(raw){try{return JSON.parse(raw)}catch(e){return raw===undefined?undefined:raw}}
+async function driveSyncThreeWayMerge(baseline,localData,cloudData){
+  if(!baseline)return null;const merged={},conflicts=[],keys=new Set([...Object.keys(baseline.keys||{}),...Object.keys(localData||{}),...Object.keys(cloudData||{})]),absent=Symbol('absent');
+  for(const key of keys){
+    const b=baseline.keys?.[key]||null,lv=Object.prototype.hasOwnProperty.call(localData,key)?driveSyncParseValue(localData[key]):absent,cv=Object.prototype.hasOwnProperty.call(cloudData,key)?driveSyncParseValue(cloudData[key]):absent;
+    if(b?.type==='records'){
+      const toMap=v=>{const m=new Map();if(Array.isArray(v))for(const x of v)if(x&&typeof x==='object'&&x.id!==undefined&&x.id!==null)m.set(String(x.id),x);return m};
+      if((lv!==absent&&!Array.isArray(lv))||(cv!==absent&&!Array.isArray(cv))){conflicts.push(key);continue}
+      const bm=new Map(Object.entries(b.records||{})),lm=toMap(lv===absent?[]:lv),cm=toMap(cv===absent?[]:cv),ids=new Set([...bm.keys(),...lm.keys(),...cm.keys()]),out=[];let keyBad=false;
+      for(const id of ids){
+        const bh=bm.has(id)?bm.get(id):null,lh=lm.has(id)?await driveSyncHashData(lm.get(id)):null,ch=cm.has(id)?await driveSyncHashData(cm.get(id)):null,lchg=lh!==bh,cchg=ch!==bh;
+        if(!lchg&&!cchg){if(lm.has(id))out.push(lm.get(id));else if(cm.has(id))out.push(cm.get(id))}
+        else if(lchg&&!cchg){if(lm.has(id))out.push(lm.get(id))}
+        else if(!lchg&&cchg){if(cm.has(id))out.push(cm.get(id))}
+        else if(lh===ch){if(lm.has(id))out.push(lm.get(id))}
+        else{keyBad=true;conflicts.push(key+'#'+id)}
+      }
+      if(!keyBad)merged[key]=JSON.stringify(out);continue;
+    }
+    const bh=b?.hash||null,lh=lv===absent?null:await driveSyncHashData(lv),ch=cv===absent?null:await driveSyncHashData(cv),lchg=lh!==bh,cchg=ch!==bh;let chosen=absent;
+    if(!lchg&&!cchg)chosen=lv!==absent?lv:cv;else if(lchg&&!cchg)chosen=lv;else if(!lchg&&cchg)chosen=cv;else if(lh===ch)chosen=lv;else{conflicts.push(key);continue}
+    if(chosen!==absent)merged[key]=typeof chosen==='string'?chosen:JSON.stringify(chosen);
+  }
+  return conflicts.length?{conflicts,merged:null}:{conflicts:[],merged};
+}
+async function driveSyncLegacyAdditiveMerge(localData,cloudData){
+  const merged={},conflicts=[],keys=new Set([...Object.keys(localData||{}),...Object.keys(cloudData||{})]);
+  for(const key of keys){
+    const lraw=localData[key],craw=cloudData[key];if(lraw===undefined){merged[key]=craw;continue}if(craw===undefined){merged[key]=lraw;continue}if(lraw===craw){merged[key]=lraw;continue}
+    let lv,cv;try{lv=JSON.parse(lraw);cv=JSON.parse(craw)}catch(e){lv=lraw;cv=craw}
+    const isRecords=x=>Array.isArray(x)&&x.every(v=>v&&typeof v==='object'&&!Array.isArray(v)&&v.id!==undefined&&v.id!==null);
+    if(isRecords(lv)&&isRecords(cv)){const lm=new Map(lv.map(x=>[String(x.id),x])),cm=new Map(cv.map(x=>[String(x.id),x])),out=[],bad=false;for(const [id,x] of lm){if(cm.has(id)){if(JSON.stringify(driveSyncStable(x))!==JSON.stringify(driveSyncStable(cm.get(id)))){bad=true;break}out.push(x)}else out.push(x)}if(!bad)for(const [id,x] of cm)if(!lm.has(id))out.push(x);if(bad)conflicts.push(key);else merged[key]=JSON.stringify(out)}else conflicts.push(key);
+  }
+  return conflicts.length?{conflicts,merged:null}:{conflicts:[],merged};
+}
 function driveSyncNewRevision(){
   if(crypto.randomUUID)return crypto.randomUUID();
   return 'rev-'+Date.now()+'-'+Math.random().toString(36).slice(2);
@@ -6686,7 +6739,7 @@ async function driveSyncSignIn(){
 }
 function driveSyncClearSession(){
   mviDriveSyncToken='';
-  ['mviapps_drive_sync_client','mviapps_drive_sync_last_cloud_hash','mviapps_drive_sync_last_cloud_revision','mviapps_drive_sync_last_local_hash','mviapps_drive_sync_last_device'].forEach(k=>localStorage.removeItem(k));
+  ['mviapps_drive_sync_client','mviapps_drive_sync_last_cloud_hash','mviapps_drive_sync_last_cloud_revision','mviapps_drive_sync_last_local_hash','mviapps_drive_sync_last_device',MVI_DRIVE_SYNC_BASELINE].forEach(k=>localStorage.removeItem(k));
   driveSyncSetButtons(false);const id=document.getElementById('driveSyncClientId');if(id)id.value='988343209498-efpe2k4lolbo12vb7b486vkdek20lqec.apps.googleusercontent.com';const h=document.getElementById('driveSyncLastHash');if(h)h.value='';driveSyncAuthMsg('Sync session cleared.');driveSyncMsg('Connect Google Drive first.');
 }
 async function driveSyncApi(url,options={}){const res=await fetch(url,{...options,headers:{...(options.headers||{}),Authorization:`Bearer ${mviDriveSyncToken}`}});if(res.status===401)throw new Error('Google Drive authorization expired. Please click Sign in with Google Drive again.');if(!res.ok){let detail='';try{detail=await res.text();}catch(e){}throw new Error('Google Drive API error '+res.status+(detail?': '+detail.slice(0,300):''));}return res;}
@@ -6717,20 +6770,20 @@ async function driveSyncDownloadCloud(force=false){
   driveSyncSetBusy(true,'Downloading data from Google Drive... Please wait. Do not refresh or close this page.');
   await driveSyncYieldForUi();
   try{const found=await driveSyncRefreshCloud();if(!found){driveSyncMsg('No cloud data is available yet.','err');return;}if(!force&&!confirm('This will replace the MVIApps data on THIS TEST DEVICE with the cloud snapshot. A backup is strongly recommended first. Continue?'))return;
-    await driveSyncRestoreData(found.snapshot.data);const after=await driveSyncBuildLocal();driveSyncSaveState(found.cloudRevision,after.hash);const h=document.getElementById('driveSyncLastHash');if(h)h.value=found.cloudRevision;driveSyncMsg('Cloud data loaded successfully. MVIApps will reload now.','ok');setTimeout(()=>location.reload(),700);
+    await driveSyncRestoreData(found.snapshot.data);const after=await driveSyncBuildLocal();driveSyncSaveState(found.cloudRevision,after.hash);await driveSyncSaveBaseline(after.data);const h=document.getElementById('driveSyncLastHash');if(h)h.value=found.cloudRevision;driveSyncMsg('Cloud data loaded successfully. MVIApps will reload now.','ok');setTimeout(()=>location.reload(),700);
   }catch(e){console.error(e);driveSyncMsg('Cloud download failed: '+(e.message||String(e)),'err');}
   finally{driveSyncSetBusy(false);}
 }
 async function driveSyncUploadLocal(force=false){
   driveSyncSetBusy(true,'Uploading local data to Google Drive... Please wait. Do not refresh or close this page.');
   await driveSyncYieldForUi();
-  try{const found=await driveSyncRefreshCloud();const local=await driveSyncBuildLocal();if(!found){const created=await driveSyncUploadSnapshot(local.data,local.hash,null);driveSyncSaveState(created.revision,local.hash);driveSyncMsg('Local data uploaded successfully. Cloud snapshot created.','ok');await driveSyncRefreshCloud();return;}
+  try{const found=await driveSyncRefreshCloud();const local=await driveSyncBuildLocal();if(!found){const created=await driveSyncUploadSnapshot(local.data,local.hash,null);driveSyncSaveState(created.revision,local.hash);await driveSyncSaveBaseline(local.data);driveSyncMsg('Local data uploaded successfully. Cloud snapshot created.','ok');await driveSyncRefreshCloud();return;}
     const lastRev=driveSyncLastCloudRevision(),lastLocal=driveSyncLastLocalHash();
     if(!lastLocal&&lastRev){driveSyncSaveState(lastRev,local.hash);}
     const baselineLocal=driveSyncLastLocalHash(),baselineRev=driveSyncLastCloudRevision();
     if(!force&&baselineRev&&found.cloudRevision!==baselineRev){driveSyncMsg('Conflict detected: the cloud changed after this device last synced. Use Sync Now to inspect, or explicitly choose Cloud/Local after reviewing your backup.','err');return;}
     if(!force&&!baselineRev&&Object.entries(found.snapshot.data||{}).length&&local.hash!==found.cloudHash){if(!confirm('This device has local data but no previous sync record. Uploading would replace the existing cloud snapshot. Continue only if this device is the source you want to keep.'))return;}
-    const uploaded=await driveSyncUploadSnapshot(local.data,local.hash,found.file.id);driveSyncSaveState(uploaded.revision,local.hash);driveSyncMsg('Local data uploaded successfully to Google Drive.','ok');await driveSyncRefreshCloud();
+    const uploaded=await driveSyncUploadSnapshot(local.data,local.hash,found.file.id);driveSyncSaveState(uploaded.revision,local.hash);await driveSyncSaveBaseline(local.data);driveSyncMsg('Local data uploaded successfully to Google Drive.','ok');await driveSyncRefreshCloud();
   }catch(e){console.error(e);driveSyncMsg('Cloud upload failed: '+(e.message||String(e)),'err');}
   finally{driveSyncSetBusy(false);}
 }
@@ -6738,24 +6791,40 @@ async function driveSyncNow(){
   driveSyncSetBusy(true,'Syncing with Google Drive... Please wait. Do not refresh or close this page.');
   await driveSyncYieldForUi();
   try{const found=await driveSyncRefreshCloud();const local=await driveSyncBuildLocal();
-    if(!found){const created=await driveSyncUploadSnapshot(local.data,local.hash,null);driveSyncSaveState(created.revision,local.hash);driveSyncMsg('First sync complete: local MVIApps data is now stored in the MVIApps cloud snapshot.','ok');await driveSyncRefreshCloud();return;}
+    if(!found){const created=await driveSyncUploadSnapshot(local.data,local.hash,null);driveSyncSaveState(created.revision,local.hash);await driveSyncSaveBaseline(local.data);driveSyncMsg('First sync complete: local MVIApps data is now stored in the MVIApps cloud snapshot.','ok');await driveSyncRefreshCloud();return;}
     let lastRev=driveSyncLastCloudRevision(),lastLocal=driveSyncLastLocalHash();
-    // Migrate the v3 test state safely: the old cloud-hash is the last known cloud revision;
-    // the current local hash becomes the local baseline so a restore-normalization does not create a false conflict.
-    if(!lastLocal&&lastRev){lastLocal=local.hash;driveSyncSaveState(lastRev,lastLocal);}
+    if(!lastLocal&&lastRev){lastLocal=local.hash;driveSyncSaveState(lastRev,lastLocal);if(!driveSyncLoadBaseline())await driveSyncSaveBaseline(local.data);}
     if(!lastRev&&!lastLocal){
       const nonEmpty=Object.entries(local.data).some(([k,v])=>k!=='mviapps_selected_financial_year'&&String(v||'').trim()&&String(v)!=='[]'&&String(v)!=='{}');
-      if(!nonEmpty){await driveSyncRestoreData(found.snapshot.data);const after=await driveSyncBuildLocal();driveSyncSaveState(found.cloudRevision,after.hash);driveSyncMsg('New device synchronized from the existing cloud snapshot. MVIApps will reload now.','ok');setTimeout(()=>location.reload(),700);return;}
+      if(!nonEmpty){await driveSyncRestoreData(found.snapshot.data);const after=await driveSyncBuildLocal();driveSyncSaveState(found.cloudRevision,after.hash);await driveSyncSaveBaseline(after.data);driveSyncMsg('New device synchronized from the existing cloud snapshot. MVIApps will reload now.','ok');setTimeout(()=>location.reload(),700);return;}
       driveSyncMsg('Conflict: this device has local data and no previous sync record, while cloud data already exists. Use Cloud Data → This Device or Local Data → Drive after making a backup. Nothing was overwritten.','err');return;
     }
     const localChanged=local.hash!==lastLocal,cloudChanged=found.cloudRevision!==lastRev;
-    if(!localChanged&&!cloudChanged){driveSyncSaveState(lastRev,lastLocal);driveSyncMsg('Already synchronized. No changes were needed.','ok');return;}
-    if(cloudChanged&&!localChanged){await driveSyncRestoreData(found.snapshot.data);const after=await driveSyncBuildLocal();driveSyncSaveState(found.cloudRevision,after.hash);driveSyncMsg('Cloud changes were downloaded to this device. MVIApps will reload now.','ok');setTimeout(()=>location.reload(),700);return;}
-    if(!cloudChanged&&localChanged){const uploaded=await driveSyncUploadSnapshot(local.data,local.hash,found.file.id);driveSyncSaveState(uploaded.revision,local.hash);driveSyncMsg('This device changed; its changes were uploaded to the MVIApps cloud snapshot.','ok');await driveSyncRefreshCloud();return;}
-    driveSyncMsg('CONFLICT DETECTED: both this device and the cloud changed since the last successful sync. Nothing was overwritten. Please make a backup, then choose explicitly between Cloud Data → This Device or Local Data → Drive.','err');
+    if(!localChanged&&!cloudChanged){driveSyncSaveState(lastRev,lastLocal);if(!driveSyncLoadBaseline())await driveSyncSaveBaseline(local.data);driveSyncMsg('Already synchronized. No changes were needed.','ok');return;}
+    if(cloudChanged&&!localChanged){await driveSyncRestoreData(found.snapshot.data);const after=await driveSyncBuildLocal();driveSyncSaveState(found.cloudRevision,after.hash);await driveSyncSaveBaseline(after.data);driveSyncMsg('Cloud changes were downloaded to this device. MVIApps will reload now.','ok');setTimeout(()=>location.reload(),700);return;}
+    if(!cloudChanged&&localChanged){const uploaded=await driveSyncUploadSnapshot(local.data,local.hash,found.file.id);driveSyncSaveState(uploaded.revision,local.hash);await driveSyncSaveBaseline(local.data);driveSyncMsg('This device changed; its changes were uploaded to the MVIApps cloud snapshot.','ok');await driveSyncRefreshCloud();return;}
+
+    // Both sides changed. First try a safe three-way merge against the last synchronized baseline.
+    // If this device predates the baseline manifest, use a conservative additive merge: only
+    // independent records are combined; any same-record difference remains a real conflict.
+    const baseline=driveSyncLoadBaseline();
+    const result=baseline?await driveSyncThreeWayMerge(baseline,local.data,found.snapshot.data):await driveSyncLegacyAdditiveMerge(local.data,found.snapshot.data);
+    if(result&&result.merged){
+      const mergedData=result.merged,mergedHash=await driveSyncHashData(mergedData);
+      const uploaded=await driveSyncUploadSnapshot(mergedData,mergedHash,found.file.id);
+      // Restore only after the merged snapshot has been safely written to Drive.
+      await driveSyncRestoreData(mergedData);
+      const after=await driveSyncBuildLocal();driveSyncSaveState(uploaded.revision,after.hash);await driveSyncSaveBaseline(after.data);
+      driveSyncMsg('Changes from both devices were merged safely and synchronized. No conflicting records were overwritten.','ok');
+      await driveSyncRefreshCloud();
+      setTimeout(()=>location.reload(),700);return;
+    }
+    const detail=result?.conflicts?.slice(0,5).join(', ')||'one or more data sections';
+    driveSyncMsg('CONFLICT DETECTED: both this device and the cloud changed, and the changes could not be merged safely ('+detail+'). Nothing was overwritten. Please make a backup, then choose explicitly between Cloud Data → This Device or Local Data → Drive.','err');
   }catch(e){console.error(e);driveSyncMsg('Sync failed: '+(e.message||String(e)),'err');}
   finally{driveSyncSetBusy(false);}
 }
+
 function driveSyncInitPage(){const id=document.getElementById('driveSyncClientId'),dev=document.getElementById('driveSyncDevice');if(id)id.value='988343209498-efpe2k4lolbo12vb7b486vkdek20lqec.apps.googleusercontent.com';if(dev)dev.value='';const h=document.getElementById('driveSyncLastHash');if(h)h.value=driveSyncLastCloudRevision()||'None';if(mviDriveSyncToken)driveSyncSetButtons(true);}
 
 
