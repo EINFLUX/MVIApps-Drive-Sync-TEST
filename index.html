@@ -1823,7 +1823,7 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
   </div>
 <div class="mvi-powered-by" aria-label="Powered by Multi Vision Inc."><span>Powered by</span> <strong>Multi Vision Inc.</strong></div></aside>
 <main class="main">
-<header class="topbar"><input class="search" placeholder="Search anything..." oninput="globalSearch(this.value)"><div class="top-right"><label class="top-fy-label" for="globalFinancialYear">Financial Year</label><select id="globalFinancialYear" class="top-fy-select" aria-label="Financial Year" onchange="setGlobalFinancialYear(this.value)"></select><span>●</span><div class="avatar">A</div><b>Admin</b></div></header>
+<header class="topbar"><input class="search" placeholder="Search anything..." oninput="globalSearch(this.value)"><div class="top-right"><label class="top-fy-label" for="globalFinancialYear">Financial Year</label><select id="globalFinancialYear" class="top-fy-select" aria-label="Financial Year" onchange="setGlobalFinancialYear(this.value)"></select><span>●</span><div class="avatar" id="mviappsTopAvatar">A</div><b id="mviappsTopUser">Admin</b><button type="button" class="mviapps-logout-btn" onclick="mviappsLogout()">Logout</button></div></header>
 <section class="content" id="content"></section>
 </main>
 </div>
@@ -7448,6 +7448,149 @@ window.addEventListener('DOMContentLoaded',mviappsRenderDashboardOnReady);
 window.addEventListener('load',mviappsRenderDashboardOnReady);
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<style id="mviapps-login-module">
+  body.mviapps-login-locked > .app{visibility:hidden !important;pointer-events:none !important;}
+  #mviappsLoginOverlay{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#eef3ff,#f8fafc);font-family:inherit;}
+  #mviappsLoginOverlay .mviapps-login-card{width:min(430px,94vw);background:#fff;border:1px solid #dfe4ea;border-radius:16px;box-shadow:0 18px 50px rgba(15,23,42,.16);padding:28px;}
+  #mviappsLoginOverlay .mviapps-login-brand{text-align:center;font-size:28px;font-weight:900;color:#1f3b8f;margin-bottom:3px;}
+  #mviappsLoginOverlay .mviapps-login-sub{text-align:center;color:#64748b;font-size:13px;margin-bottom:22px;}
+  #mviappsLoginOverlay h2{margin:0 0 6px;font-size:20px;color:#172033;text-align:center;}
+  #mviappsLoginOverlay .mviapps-login-help{text-align:center;color:#64748b;font-size:12px;margin:0 0 18px;line-height:1.5;}
+  #mviappsLoginOverlay .mviapps-login-field{margin:12px 0;}
+  #mviappsLoginOverlay label{display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;}
+  #mviappsLoginOverlay input{width:100%;height:44px;box-sizing:border-box;border:1px solid #cfd6df;border-radius:9px;padding:0 12px;font-size:14px;outline:none;background:#fff;color:#172033;}
+  #mviappsLoginOverlay input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+  #mviappsLoginOverlay .mviapps-login-btn{width:100%;height:44px;border:0;border-radius:9px;background:#2563eb;color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-top:10px;}
+  #mviappsLoginOverlay .mviapps-login-btn:hover{filter:brightness(.97);}
+  #mviappsLoginOverlay .mviapps-login-msg{min-height:18px;margin-top:10px;text-align:center;font-size:12px;color:#dc2626;font-weight:600;}
+  .mviapps-logout-btn{border:1px solid #d7dce3;background:#fff;color:#334155;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;}
+  .mviapps-logout-btn:hover{background:#f8fafc;}
+  @media(max-width:700px){#mviappsLoginOverlay{padding:14px;}#mviappsLoginOverlay .mviapps-login-card{padding:22px 18px;border-radius:14px;}.mviapps-logout-btn{padding:6px 8px;font-size:11px;}}
+</style>
+<div id="mviappsLoginOverlay" style="display:none" aria-modal="true" role="dialog">
+  <div class="mviapps-login-card">
+    <div class="mviapps-login-brand">mviapps</div>
+    <div class="mviapps-login-sub">Inventory &amp; Accounts Management</div>
+    <h2 id="mviappsLoginTitle">Login</h2>
+    <p id="mviappsLoginHelp" class="mviapps-login-help">Enter your User ID and Password to continue.</p>
+    <form id="mviappsLoginForm" autocomplete="on">
+      <div class="mviapps-login-field">
+        <label for="mviappsLoginUser">User ID</label>
+        <input id="mviappsLoginUser" name="username" type="text" autocomplete="username" required>
+      </div>
+      <div class="mviapps-login-field">
+        <label for="mviappsLoginPass">Password</label>
+        <input id="mviappsLoginPass" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="mviappsLoginConfirmWrap" class="mviapps-login-field" style="display:none">
+        <label for="mviappsLoginConfirm">Confirm Password</label>
+        <input id="mviappsLoginConfirm" name="passwordConfirm" type="password" autocomplete="new-password">
+      </div>
+      <button id="mviappsLoginSubmit" class="mviapps-login-btn" type="submit">Login</button>
+      <div id="mviappsLoginMsg" class="mviapps-login-msg" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<script id="mviapps-login-module-js">
+(function(){
+  'use strict';
+  const CRED_KEY='mviapps_login_credentials_v1';
+  const SESSION_KEY='mviapps_login_session_v1';
+  const overlay=document.getElementById('mviappsLoginOverlay');
+  const form=document.getElementById('mviappsLoginForm');
+  const title=document.getElementById('mviappsLoginTitle');
+  const help=document.getElementById('mviappsLoginHelp');
+  const confirmWrap=document.getElementById('mviappsLoginConfirmWrap');
+  const confirmInput=document.getElementById('mviappsLoginConfirm');
+  const submit=document.getElementById('mviappsLoginSubmit');
+  const msg=document.getElementById('mviappsLoginMsg');
+  const userInput=document.getElementById('mviappsLoginUser');
+  const passInput=document.getElementById('mviappsLoginPass');
+
+  function b64(bytes){let s='';for(const b of new Uint8Array(bytes))s+=String.fromCharCode(b);return btoa(s);}
+  async function hashPassword(password){
+    if(window.crypto&&crypto.subtle){
+      const data=new TextEncoder().encode(password);
+      return b64(await crypto.subtle.digest('SHA-256',data));
+    }
+    return btoa(unescape(encodeURIComponent(password)));
+  }
+  function getCreds(){try{return JSON.parse(localStorage.getItem(CRED_KEY)||'null')}catch(e){return null}}
+  function setUserHeader(username){
+    const u=document.getElementById('mviappsTopUser'), a=document.getElementById('mviappsTopAvatar');
+    if(u)u.textContent=username||'Admin';
+    if(a)a.textContent=(username||'A').trim().charAt(0).toUpperCase()||'A';
+  }
+  function lock(){
+    document.body.classList.add('mviapps-login-locked');
+    overlay.style.display='flex';
+    msg.textContent='';
+    setTimeout(()=>userInput.focus(),50);
+  }
+  function unlock(username){
+    document.body.classList.remove('mviapps-login-locked');
+    overlay.style.display='none';
+    setUserHeader(username);
+  }
+  function setupMode(){
+    title.textContent='Create Admin Account';
+    help.textContent='First time setup: create the User ID and Password you will use to open MVIApps.';
+    confirmWrap.style.display='block';
+    confirmInput.required=true;
+    confirmInput.autocomplete='new-password';
+    submit.textContent='Create Admin Account';
+    passInput.autocomplete='new-password';
+  }
+  function loginMode(){
+    title.textContent='Login';
+    help.textContent='Enter your User ID and Password to continue.';
+    confirmWrap.style.display='none';
+    confirmInput.required=false;
+    submit.textContent='Login';
+    passInput.autocomplete='current-password';
+  }
+  form.addEventListener('submit',async function(e){
+    e.preventDefault();
+    msg.textContent='';
+    const username=userInput.value.trim();
+    const password=passInput.value;
+    const creds=getCreds();
+    if(!username||!password){msg.textContent='Please enter User ID and Password.';return;}
+    if(!creds){
+      if(password.length<4){msg.textContent='Password must be at least 4 characters.';return;}
+      if(password!==confirmInput.value){msg.textContent='Passwords do not match.';return;}
+      const hash=await hashPassword(password);
+      localStorage.setItem(CRED_KEY,JSON.stringify({username,hash,createdAt:new Date().toISOString()}));
+      sessionStorage.setItem(SESSION_KEY,username);
+      unlock(username);
+      return;
+    }
+    const hash=await hashPassword(password);
+    if(username!==String(creds.username)||hash!==String(creds.hash)){
+      msg.textContent='Incorrect User ID or Password.';
+      passInput.select();
+      return;
+    }
+    sessionStorage.setItem(SESSION_KEY,username);
+    unlock(username);
+  });
+  window.mviappsLogout=function(){
+    sessionStorage.removeItem(SESSION_KEY);
+    loginMode();
+    userInput.value='';passInput.value='';confirmInput.value='';
+    lock();
+  };
+  function init(){
+    const creds=getCreds();
+    if(creds){loginMode();}else{setupMode();}
+    const session=sessionStorage.getItem(SESSION_KEY);
+    if(creds&&session&&session===String(creds.username)){unlock(session);}
+    else lock();
+  }
+  init();
+})();
+</script>
 </body></html>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{ try{mviappsBindBankModeSelector();}catch(e){} });
