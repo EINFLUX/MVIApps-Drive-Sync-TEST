@@ -4811,13 +4811,16 @@ function getSortedItems(){
 }
 function itemDetails(){
 return `<div class="page-head"><div style="display:flex;align-items:center;gap:12px"><button class="btn" onclick="show('add-item')">+ Add Item</button><div><h1>Item Details</h1><p>View, modify and manage all saved inventory items.</p></div></div></div>
-<div class="panel"><div class="toolbar"><input class="input" id="itemSearch" placeholder="Search item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
+<div class="panel"><div class="toolbar"><input class="input" id="itemSearch" placeholder="Search item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')} </select><div id="itemTotalCount" style="margin-left:auto;font-weight:600;color:var(--text);white-space:nowrap">Total Items: 0</div></div>
 <div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Item</th><th>Code</th><th>Unit</th><th>Purchase Rate</th><th>Sale Rate</th><th>Quantity</th><th>Stock Value</th><th>Action</th></tr></thead><tbody id="itemRows"></tbody></table></div></div>`;
 }
 async function renderItems(){
 const rows=document.getElementById('itemRows');if(!rows)return;
 const q=(document.getElementById('itemSearch')?.value||'').toLowerCase(), c=(document.getElementById('itemCategorySearch')?.value||'').toLowerCase();
-const items=getSortedItems().filter(x=>(!q||String(x.name||'').toLowerCase().includes(q)||String(x.code||'').toLowerCase().includes(q))&&(!c||String(x.category||'').toLowerCase().includes(c)));
+const allItems=getSortedItems();
+const categoryItems=c?allItems.filter(x=>String(x.category||'').toLowerCase().includes(c)):allItems;
+const totalEl=document.getElementById('itemTotalCount'); if(totalEl) totalEl.textContent=`Total Items: ${categoryItems.length}`;
+const items=categoryItems.filter(x=>(!q||String(x.name||'').toLowerCase().includes(q)||String(x.code||'').toLowerCase().includes(q)));
 const imageMap=new Map();
 await Promise.all(items.map(async x=>imageMap.set(String(x.id),await getItemImageData(x))));
 rows.innerHTML=items.length?items.map((x)=>{const st=getCurrentStockSnapshot(x),img=imageMap.get(String(x.id))||'';return `<tr><td class="item-clickable" onclick="viewItemDetails(${x.id})">${img?`<img src="${img}" style="width:48px;height:48px;object-fit:contain;border-radius:7px;border:1px solid var(--line);cursor:pointer">`:'—'}</td><td class="item-clickable" onclick="viewItemDetails(${x.id})"><b>${escapeHtml(x.name||'')}</b><br><span style="font-size:11px;color:var(--muted)">${escapeHtml(x.category||'')}</span></td><td>${x.code||'—'}</td><td>${x.unit||'—'}</td><td>₹ ${x.purchase||'0'}</td><td>₹ ${x.sale||'0'}</td><td><b>${st.qty}</b></td><td><b>₹ ${st.value.toFixed(2)}</b></td><td><button class="btn secondary" onclick="editItem(${x.id})">Modify</button> <button class="btn secondary" onclick="deleteItem(${x.id})">Delete</button></td></tr>`}).join(''):`<tr><td colspan="9" class="empty">No items found. Click “+ Add Item” to create your first item.</td></tr>`;
