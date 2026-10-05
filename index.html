@@ -6651,7 +6651,7 @@ function driveSyncLastCloudRevision(){return localStorage.getItem('mviapps_drive
 function driveSyncLastLocalHash(){return localStorage.getItem('mviapps_drive_sync_last_local_hash')||'';}
 const MVI_DRIVE_SYNC_BASELINE='mviapps_drive_sync_base_manifest';
 function driveSyncExcludeDataKey(k){
-  return k==='mviapps_drive_sync_last_cloud_hash'||k==='mviapps_drive_sync_last_cloud_revision'||k==='mviapps_drive_sync_last_local_hash'||k===MVI_DRIVE_SYNC_BASELINE||k==='mviapps_drive_sync_client'||k==='mviapps_drive_sync_last_device';
+  return k==='mviapps_drive_sync_last_cloud_hash'||k==='mviapps_drive_sync_last_cloud_revision'||k==='mviapps_drive_sync_last_local_hash'||k===MVI_DRIVE_SYNC_BASELINE||k==='mviapps_drive_sync_client'||k==='mviapps_drive_sync_last_device'||k==='mviapps_lastBackupAt'||k==='mviapps_lastBackupData';
 }
 async function driveSyncGetLocalSnapshot(){
   const data=await appDataWithHighStorage();
@@ -6687,7 +6687,7 @@ async function driveSyncBuildBaselineManifest(data){
   return manifest;
 }
 async function driveSyncSaveBaseline(data){localStorage.setItem(MVI_DRIVE_SYNC_BASELINE,JSON.stringify(await driveSyncBuildBaselineManifest(data)))}
-function driveSyncLoadBaseline(){try{const v=JSON.parse(localStorage.getItem(MVI_DRIVE_SYNC_BASELINE)||'null');return v&&v.version===1&&v.keys?v:null}catch(e){return null}}
+function driveSyncLoadBaseline(){try{const v=JSON.parse(localStorage.getItem(MVI_DRIVE_SYNC_BASELINE)||'null');if(v&&v.version===1&&v.keys){Object.keys(v.keys).forEach(k=>{if(driveSyncExcludeDataKey(k))delete v.keys[k]});return v}return null}catch(e){return null}}
 function driveSyncParseValue(raw){try{return JSON.parse(raw)}catch(e){return raw===undefined?undefined:raw}}
 async function driveSyncThreeWayMerge(baseline,localData,cloudData){
   if(!baseline)return null;const merged={},conflicts=[],keys=new Set([...Object.keys(baseline.keys||{}),...Object.keys(localData||{}),...Object.keys(cloudData||{})]),absent=Symbol('absent');
@@ -6748,7 +6748,7 @@ async function driveSyncReadFile(fileId){const res=await driveSyncApi(`https://w
 function driveSyncRenderCloud(snapshot){const view=document.getElementById('driveSyncCloudView');if(!view)return;if(!snapshot){view.textContent='No cloud snapshot exists yet.';return;}view.textContent=JSON.stringify({schemaVersion:snapshot.schemaVersion,app:snapshot.app,device:snapshot.meta?.updatedBy||'',updatedAt:snapshot.meta?.updatedAt||'',revision:snapshot.meta?.cloudRevision||snapshot.meta?.cloudHash||'',dataSections:Object.keys(snapshot.data||{}).length,itemCount:(()=>{try{return JSON.parse(snapshot.data?.mviapps_items||'[]').length}catch(e){return 0}})()},null,2);}
 async function driveSyncRefreshCloud(){
   try{const file=await driveSyncFindFile();if(!file){driveSyncRenderCloud(null);driveSyncMsg('No MVIApps integration-test cloud snapshot exists yet. The first Sync Now will create it.');const h=document.getElementById('driveSyncLastHash');if(h)h.value=driveSyncLastCloudRevision()||'None';return null;}
-    const snapshot=await driveSyncReadFile(file.id);if(!snapshot?.data)throw new Error('Cloud file exists but does not contain a valid MVIApps snapshot.');driveSyncRenderCloud(snapshot);
+    const snapshot=await driveSyncReadFile(file.id);if(!snapshot?.data)throw new Error('Cloud file exists but does not contain a valid MVIApps snapshot.');Object.keys(snapshot.data||{}).forEach(k=>{if(driveSyncExcludeDataKey(k))delete snapshot.data[k]});driveSyncRenderCloud(snapshot);
     const cloudHash=snapshot.meta?.cloudHash||await driveSyncHashData(snapshot.data),cloudRevision=snapshot.meta?.cloudRevision||cloudHash;
     const h=document.getElementById('driveSyncLastHash');if(h)h.value=driveSyncLastCloudRevision()||'None';return {file,snapshot,cloudHash,cloudRevision};
   }catch(e){driveSyncMsg(e.message||String(e),'err');return null;}
