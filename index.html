@@ -4811,7 +4811,7 @@ function getSortedItems(){
 }
 function itemDetails(){
 return `<div class="page-head"><div style="display:flex;align-items:center;gap:12px"><button class="btn" onclick="show('add-item')">+ Add Item</button><div><h1>Item Details</h1><p>View, modify and manage all saved inventory items.</p></div></div></div>
-<div class="panel"><div class="toolbar"><input class="input" id="itemSearch" placeholder="Search item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')} </select><div id="itemTotalCount" style="margin-left:12px;font-weight:600;color:var(--text);white-space:nowrap">Total Items: 0</div></div>
+<div class="panel"><div class="toolbar"><input class="input" id="itemSearch" placeholder="Search item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()" style="min-width:140px;height:40px;box-sizing:border-box"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')} </select><div id="itemTotalCount" style="height:40px;min-width:140px;box-sizing:border-box;display:inline-flex;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);white-space:nowrap;font-weight:600">Total Items: <b style="margin-left:4px">0</b></div></div>
 <div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Item</th><th>Code</th><th>Unit</th><th>Purchase Rate</th><th>Sale Rate</th><th>Quantity</th><th>Stock Value</th><th>Action</th></tr></thead><tbody id="itemRows"></tbody></table></div></div>`;
 }
 async function renderItems(){
@@ -4819,7 +4819,7 @@ const rows=document.getElementById('itemRows');if(!rows)return;
 const q=(document.getElementById('itemSearch')?.value||'').toLowerCase(), c=(document.getElementById('itemCategorySearch')?.value||'').toLowerCase();
 const allItems=getSortedItems();
 const categoryItems=c?allItems.filter(x=>String(x.category||'').toLowerCase().includes(c)):allItems;
-const totalEl=document.getElementById('itemTotalCount'); if(totalEl) totalEl.textContent=`Total Items: ${categoryItems.length}`;
+const totalEl=document.getElementById('itemTotalCount'); if(totalEl) totalEl.innerHTML=`Total Items: <b style="margin-left:4px">${categoryItems.length}</b>`;
 const items=categoryItems.filter(x=>(!q||String(x.name||'').toLowerCase().includes(q)||String(x.code||'').toLowerCase().includes(q)));
 const imageMap=new Map();
 await Promise.all(items.map(async x=>imageMap.set(String(x.id),await getItemImageData(x))));
