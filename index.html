@@ -4811,7 +4811,7 @@ function getSortedItems(){
 }
 function itemDetails(){
 return `<div class="page-head"><div style="display:flex;align-items:center;gap:12px"><button class="btn" onclick="show('add-item')">+ Add Item</button><div><h1>Item Details</h1><p>View, modify and manage all saved inventory items.</p></div></div></div>
-<div class="panel"><div class="toolbar"><input class="input" id="itemSearch" placeholder="Search item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')} </select><div id="itemTotalCount" style="margin-left:auto;font-weight:600;color:var(--text);white-space:nowrap">Total Items: 0</div></div>
+<div class="panel"><div class="toolbar"><input class="input" id="itemSearch" placeholder="Search item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')} </select><div id="itemTotalCount" style="margin-left:12px;font-weight:600;color:var(--text);white-space:nowrap">Total Items: 0</div></div>
 <div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Item</th><th>Code</th><th>Unit</th><th>Purchase Rate</th><th>Sale Rate</th><th>Quantity</th><th>Stock Value</th><th>Action</th></tr></thead><tbody id="itemRows"></tbody></table></div></div>`;
 }
 async function renderItems(){
