@@ -6508,7 +6508,11 @@ function appearanceSettings(){return settingsPage('Appearance','Personalize the 
   `<div class="settings-note"><b>Appearance settings</b><span>These preferences are stored locally in MVIApps and do not change your business transactions or accounting data.</span></div>`
 ])} 
 
-function securitySettings(){return settingsPage('Security','Protect app access and define basic user permissions.',[settingSection('Login Security','Set the basic account protection options.',`<div class="formgrid">${settingInput('User Name','securityUser','Enter user name')}${settingInput('Password','securityPassword','Enter password','password')}${settingInput('Confirm Password','securityConfirm','Confirm password','password')}</div>`),settingSection('Access Control','Define the access level for the current user.',`<div class="formgrid">${settingSelect('Role','securityRole',['Owner','Administrator','Staff','Viewer'])}${settingSelect('Allow Data Delete','allowDelete',['No','Yes'])}${settingSelect('Allow Settings Changes','allowSettings',['Yes','No'])}${settingSelect('Allow Reports','allowReports',['Yes','No'])}</div>`),settingSection('Session & Safety','Basic protection against accidental or unattended access.',`<div class="formgrid">${settingSelect('Auto Lock','autoLock',['Off','5 Minutes','10 Minutes','15 Minutes','30 Minutes'])}${settingSelect('Confirm Before Delete','confirmDelete',['Yes','No'])}</div>`),`<div class="settings-note warning"><b>Security reminder</b><span>Use a strong password and keep backup files in a safe location.</span></div>`])}
+function securitySettings(){return settingsPage('Security','Protect app access and manage users who can open MVIApps.',[
+  settingSection('User Management','Only the Admin can add or remove users. Each user gets a separate User ID, Password and Role.',`<div class="formgrid"><div class="field"><label>User ID</label><input id="mviNewUserId" type="text" placeholder="Enter User ID" autocomplete="off"></div><div class="field"><label>User Name</label><input id="mviNewUserName" type="text" placeholder="Enter user name"></div><div class="field"><label>Password</label><input id="mviNewUserPassword" type="password" placeholder="Minimum 4 characters" autocomplete="new-password"></div><div class="field"><label>Role</label><select id="mviNewUserRole"><option>Administrator</option><option>Staff</option><option>Viewer</option></select></div></div><div style="margin-top:12px;display:flex;justify-content:flex-end"><button type="button" class="btn" onclick="mviappsAddUser()">+ Add User</button></div><div id="mviappsUserList" style="margin-top:18px"></div>`),
+  settingSection('Session & Safety','Basic protection against accidental or unattended access.',`<div class="formgrid">${settingSelect('Auto Lock','autoLock',['Off','5 Minutes','10 Minutes','15 Minutes','30 Minutes'])}${settingSelect('Confirm Before Delete','confirmDelete',['Yes','No'])}</div>`),
+  `<div class="settings-note warning"><b>Security reminder</b><span>User passwords are stored as hashes in this browser. This is local app-level protection, not server-side authentication.</span></div>`
+])}
 function previewCompanyImage(input,previewId,storageKey){const file=input.files&&input.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('Please select an image file.');input.value='';return;}if(file.size>2*1024*1024){alert('Please choose an image smaller than 2 MB.');input.value='';return;}const reader=new FileReader();reader.onload=function(e){try{localStorage.setItem(storageKey,e.target.result);const el=document.getElementById(previewId);if(el)el.innerHTML='<img src=\"'+e.target.result+'\" style=\"max-width:220px;max-height:100px;object-fit:contain\">';}catch(err){alert('Image could not be saved.');}};reader.readAsDataURL(file)}
 function removeCompanyImage(storageKey,previewId){localStorage.removeItem(storageKey);const el=document.getElementById(previewId);if(el)el.innerHTML='<span style=\"color:#64748b\">No image uploaded</span>';}
 function loadSettingsPage(title){
@@ -6520,6 +6524,7 @@ function loadSettingsPage(title){
     const v=localStorage.getItem(prefix+el.id);
     if(v!==null)el.value=v;
   });
+  if(title==='Security') setTimeout(mviappsRenderUserList,0);
 }
 function saveSettingsPage(title){
   const root=document.getElementById('content');
@@ -6533,6 +6538,7 @@ function saveSettingsPage(title){
   });
   alert(title+' settings saved successfully.');
   if(title==='Appearance') applyMVIAppsAppearance();
+  if(title==='Security') setTimeout(mviappsRenderUserList,0);
   if(title==='Company Details'){
     root.innerHTML=companySettings();
     loadCompanySettings();
@@ -7496,6 +7502,7 @@ window.addEventListener('load',mviappsRenderDashboardOnReady);
 (function(){
   'use strict';
   const CRED_KEY='mviapps_login_credentials_v1';
+  const USERS_KEY='mviapps_login_users_v1';
   const SESSION_KEY='mviapps_login_session_v1';
   const overlay=document.getElementById('mviappsLoginOverlay');
   const form=document.getElementById('mviappsLoginForm');
@@ -7507,89 +7514,76 @@ window.addEventListener('load',mviappsRenderDashboardOnReady);
   const msg=document.getElementById('mviappsLoginMsg');
   const userInput=document.getElementById('mviappsLoginUser');
   const passInput=document.getElementById('mviappsLoginPass');
-
   function b64(bytes){let s='';for(const b of new Uint8Array(bytes))s+=String.fromCharCode(b);return btoa(s);}
   async function hashPassword(password){
-    if(window.crypto&&crypto.subtle){
-      const data=new TextEncoder().encode(password);
-      return b64(await crypto.subtle.digest('SHA-256',data));
-    }
+    if(window.crypto&&crypto.subtle){const data=new TextEncoder().encode(password);return b64(await crypto.subtle.digest('SHA-256',data));}
     return btoa(unescape(encodeURIComponent(password)));
   }
-  function getCreds(){try{return JSON.parse(localStorage.getItem(CRED_KEY)||'null')}catch(e){return null}}
-  function setUserHeader(username){
-    const u=document.getElementById('mviappsTopUser'), a=document.getElementById('mviappsTopAvatar');
-    if(u)u.textContent=username||'Admin';
-    if(a)a.textContent=(username||'A').trim().charAt(0).toUpperCase()||'A';
+  function getUsers(){try{return JSON.parse(localStorage.getItem(USERS_KEY)||'[]')||[]}catch(e){return []}}
+  function saveUsers(users){localStorage.setItem(USERS_KEY,JSON.stringify(users));}
+  function migrateLegacy(){
+    const users=getUsers(); if(users.length)return users;
+    try{const old=JSON.parse(localStorage.getItem(CRED_KEY)||'null'); if(old&&old.username&&old.hash){const migrated=[{username:String(old.username),name:String(old.username),hash:String(old.hash),role:'Administrator',createdAt:old.createdAt||new Date().toISOString()}];saveUsers(migrated);return migrated;}}catch(e){}
+    return [];
   }
-  function lock(){
-    document.body.classList.add('mviapps-login-locked');
-    overlay.style.display='flex';
-    msg.textContent='';
-    setTimeout(()=>userInput.focus(),50);
-  }
-  function unlock(username){
-    document.body.classList.remove('mviapps-login-locked');
-    overlay.style.display='none';
-    setUserHeader(username);
-  }
-  function setupMode(){
-    title.textContent='Create Admin Account';
-    help.textContent='First time setup: create the User ID and Password you will use to open MVIApps.';
-    confirmWrap.style.display='block';
-    confirmInput.required=true;
-    confirmInput.autocomplete='new-password';
-    submit.textContent='Create Admin Account';
-    passInput.autocomplete='new-password';
-  }
-  function loginMode(){
-    title.textContent='Login';
-    help.textContent='Enter your User ID and Password to continue.';
-    confirmWrap.style.display='none';
-    confirmInput.required=false;
-    submit.textContent='Login';
-    passInput.autocomplete='current-password';
-  }
+  function getCreds(){const users=migrateLegacy();return users[0]||null}
+  function setUserHeader(username){const u=document.getElementById('mviappsTopUser'),a=document.getElementById('mviappsTopAvatar');if(u)u.textContent=username||'Admin';if(a)a.textContent=(username||'A').trim().charAt(0).toUpperCase()||'A';}
+  function lock(){document.body.classList.add('mviapps-login-locked');overlay.style.display='flex';msg.textContent='';setTimeout(()=>userInput.focus(),50);}
+  function unlock(username){document.body.classList.remove('mviapps-login-locked');overlay.style.display='none';setUserHeader(username);}
+  function setupMode(){title.textContent='Create Admin Account';help.textContent='First time setup: create the User ID and Password you will use to open MVIApps.';confirmWrap.style.display='block';confirmInput.required=true;confirmInput.autocomplete='new-password';submit.textContent='Create Admin Account';passInput.autocomplete='new-password';}
+  function loginMode(){title.textContent='Login';help.textContent='Enter your User ID and Password to continue.';confirmWrap.style.display='none';confirmInput.required=false;submit.textContent='Login';passInput.autocomplete='current-password';}
   form.addEventListener('submit',async function(e){
-    e.preventDefault();
-    msg.textContent='';
-    const username=userInput.value.trim();
-    const password=passInput.value;
-    const creds=getCreds();
+    e.preventDefault();msg.textContent='';const username=userInput.value.trim(),password=passInput.value;let users=migrateLegacy();
     if(!username||!password){msg.textContent='Please enter User ID and Password.';return;}
-    if(!creds){
+    if(!users.length){
       if(password.length<4){msg.textContent='Password must be at least 4 characters.';return;}
       if(password!==confirmInput.value){msg.textContent='Passwords do not match.';return;}
-      const hash=await hashPassword(password);
-      localStorage.setItem(CRED_KEY,JSON.stringify({username,hash,createdAt:new Date().toISOString()}));
-      sessionStorage.setItem(SESSION_KEY,username);
-      unlock(username);
-      return;
+      const hash=await hashPassword(password);saveUsers([{username,name:username,hash,role:'Administrator',createdAt:new Date().toISOString()}]);localStorage.removeItem(CRED_KEY);sessionStorage.setItem(SESSION_KEY,username);unlock(username);return;
     }
-    const hash=await hashPassword(password);
-    if(username!==String(creds.username)||hash!==String(creds.hash)){
-      msg.textContent='Incorrect User ID or Password.';
-      passInput.select();
-      return;
-    }
-    sessionStorage.setItem(SESSION_KEY,username);
-    unlock(username);
+    const hash=await hashPassword(password);const user=users.find(x=>String(x.username).toLowerCase()===username.toLowerCase()&&String(x.hash)===hash);
+    if(!user){msg.textContent='Incorrect User ID or Password.';passInput.select();return;}
+    sessionStorage.setItem(SESSION_KEY,user.username);unlock(user.username);
   });
-  window.mviappsLogout=function(){
-    sessionStorage.removeItem(SESSION_KEY);
-    loginMode();
-    userInput.value='';passInput.value='';confirmInput.value='';
-    lock();
-  };
-  function init(){
-    const creds=getCreds();
-    if(creds){loginMode();}else{setupMode();}
-    const session=sessionStorage.getItem(SESSION_KEY);
-    if(creds&&session&&session===String(creds.username)){unlock(session);}
-    else lock();
-  }
+  window.mviappsLogout=function(){sessionStorage.removeItem(SESSION_KEY);loginMode();userInput.value='';passInput.value='';confirmInput.value='';lock();};
+  window.mviappsCurrentUser=function(){const session=sessionStorage.getItem(SESSION_KEY);return migrateLegacy().find(x=>String(x.username)===String(session))||null;};
+  window.mviappsIsAdmin=function(){const u=window.mviappsCurrentUser();return !!u&&['admin','administrator','owner'].includes(String(u.role||'').toLowerCase());};
+  window.mviappsHashPassword=hashPassword;
+  window.mviappsGetUsers=function(){return migrateLegacy();};
+  window.mviappsSaveUsers=function(users){saveUsers(users);};
+  function init(){const users=migrateLegacy();if(users.length)loginMode();else setupMode();const session=sessionStorage.getItem(SESSION_KEY);const current=users.find(x=>String(x.username)===String(session));if(current)unlock(current.username);else lock();}
   init();
 })();
+</script>
+<script id="mviapps-user-management-js">
+function mviappsRenderUserList(){
+  const box=document.getElementById('mviappsUserList'); if(!box)return;
+  if(!mviappsIsAdmin()){box.innerHTML='<div class="settings-note warning"><b>Access restricted</b><span>Only an Admin can manage users.</span></div>';return;}
+  const users=mviappsGetUsers();
+  box.innerHTML=`<div style="font-weight:800;margin-bottom:8px">Users</div><div class="table-wrap"><table><thead><tr><th>User ID</th><th>User Name</th><th>Role</th><th style="width:150px">Action</th></tr></thead><tbody>${users.map((u,i)=>`<tr><td>${esc(u.username||'')}</td><td>${esc(u.name||u.username||'')}</td><td>${esc(u.role||'Administrator')}</td><td>${i===0?'<span style="color:var(--muted);font-size:12px">Main Admin</span>':`<button type="button" class="btn secondary" style="padding:5px 8px;font-size:11px" onclick="mviappsDeleteUser(${i})">Delete</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+}
+async function mviappsAddUser(){
+  if(!mviappsIsAdmin()){alert('Only an Admin can add users.');return;}
+  const id=(document.getElementById('mviNewUserId')?.value||'').trim();
+  const name=(document.getElementById('mviNewUserName')?.value||'').trim()||id;
+  const password=document.getElementById('mviNewUserPassword')?.value||'';
+  const role=document.getElementById('mviNewUserRole')?.value||'Staff';
+  if(!id||!password){alert('Please enter User ID and Password.');return;}
+  if(password.length<4){alert('Password must be at least 4 characters.');return;}
+  const users=mviappsGetUsers();
+  if(users.some(u=>String(u.username).toLowerCase()===id.toLowerCase())){alert('This User ID already exists.');return;}
+  users.push({username:id,name,hash:await mviappsHashPassword(password),role,createdAt:new Date().toISOString()});
+  mviappsSaveUsers(users);
+  ['mviNewUserId','mviNewUserName','mviNewUserPassword'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
+  mviappsRenderUserList();
+  alert('User added successfully.');
+}
+function mviappsDeleteUser(index){
+  if(!mviappsIsAdmin()){alert('Only an Admin can delete users.');return;}
+  const users=mviappsGetUsers(); if(index===0){alert('The Main Admin cannot be deleted.');return;}
+  if(!users[index])return;
+  if(!confirm('Delete user '+users[index].username+'?'))return;
+  users.splice(index,1);mviappsSaveUsers(users);mviappsRenderUserList();
+}
 </script>
 </body></html>
 <script>
