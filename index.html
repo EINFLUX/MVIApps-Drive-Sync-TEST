@@ -1788,11 +1788,11 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
     </div></div>
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon sale">↗</span>Sale <span class="chev">⌄</span></button><div class="sub">
       <button onclick="show('sale-invoices',this)">Sale Invoices</button><button onclick="show('payment-in',this)">Payment-In</button><button onclick="show('other-income',this)">Other Income</button>
-    </div></div>
+    </div></div>    <div class="group"><button onclick="show('point-of-sale',this)"><span class="nav-icon sale">▣</span>Point of Sale (POS)</button></div>
+
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon purchase">▥</span>Purchase &amp; Expense <span class="chev">⌄</span></button><div class="sub">
       <button onclick="show('purchase-invoices',this)">Purchase Invoices</button><button onclick="show('purchase-returns',this)">Purchase Returns</button><button onclick="show('expenses',this)">Expenses</button><button onclick="show('payment-out',this)">Payment-Out</button>
     </div></div>
-    <div class="group"><button onclick="toggle(this)"><span class="nav-icon sale">▣</span>Point of Sale (POS) <span class="chev">⌄</span></button><div class="sub"></div></div>
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon bank">▥</span>Bank &amp; Cash <span class="chev">⌄</span></button><div class="sub">
       <button onclick="show('bank-accounts',this)">Bank Accounts</button><button onclick="show('cash',this)">Cash</button>
     </div></div>
@@ -3577,6 +3577,7 @@ payable:{title:"Payable",sub:"Party-wise outstanding amounts after payments and 
 "item-details":{title:"Item Details",sub:"Manage your stored inventory items",html:itemDetails()},
 "stock-summary":{title:"Stock Summary",sub:"Current inventory position",html:stockSummary()},
 "stock-ledger":{title:"Stock Ledger",sub:"Item-wise stock movement",html:stockLedger()},"godown-management":{title:"Godown Management",sub:"Manage godowns and transfer stock between locations",html:godownManagement()},
+"point-of-sale":{title:"Point of Sale (POS)",sub:"Fast counter billing",html:pointOfSalePage()},
 "sale-invoices":{title:"Sale Invoices",sub:"View, print, modify and delete saved sales invoices",html:saleInvoices()},
 "payment-in":{title:"Payment-In",sub:"Record customer receipts",html:payment("Payment-In")},
 "other-income":{title:"Other Income",sub:"Record non-sales income",html:payment("Other Income")},
@@ -5176,6 +5177,274 @@ function autoFillDocumentNumbers(){
   const exp=document.getElementById('expenseNo');
   if(exp && !exp.value.trim()) exp.value=getNextAutoNumber('mviapps_expenses','EXP');
 }
+
+function pointOfSalePage(){
+  const today=new Date().toISOString().slice(0,10);
+  return `<style>
+    .mvi-pos{display:grid;grid-template-columns:minmax(0,1fr) 450px;gap:6px;height:calc(100vh - 132px);min-height:560px}
+    .mvi-pos-left,.mvi-pos-right{background:#fff;border:1px solid #d7dee8;border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+    .mvi-pos-search{height:42px;border:0;border-bottom:1px solid #d7dee8;padding:0 14px;font-size:15px;outline:none;width:100%}
+    .mvi-pos-table-wrap{flex:1;overflow:auto}
+    .mvi-pos-table{width:100%;border-collapse:collapse;min-width:720px}
+    .mvi-pos-table th{background:#f4f6f8;color:#53657d;font-size:12px;text-align:left;padding:11px 9px;border-right:1px solid #d7dee8;border-bottom:1px solid #d7dee8;white-space:nowrap}
+    .mvi-pos-table td{padding:8px 9px;border-right:1px solid #d7dee8;border-bottom:1px solid #e3e8ef;font-size:13px;vertical-align:middle}
+    .mvi-pos-empty{text-align:center!important;color:#8995a7;padding:70px 20px!important}
+    .mvi-pos-input{height:38px;border:1px solid #b9c5d5;border-radius:6px;padding:7px 9px;background:#fff;width:100%;box-sizing:border-box}
+    .mvi-pos-input:focus{outline:2px solid rgba(37,99,235,.14);border-color:#6b8cff}
+    .mvi-pos-right-head{padding:10px 12px;border-bottom:1px solid #d7dee8}
+    .mvi-pos-date{height:38px}
+    .mvi-pos-customer{margin-top:10px}
+    .mvi-pos-customer select{width:100%;height:42px}
+    .mvi-pos-summary{border-bottom:1px solid #d7dee8;padding:14px 12px}
+    .mvi-pos-total-row{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:16px}
+    .mvi-pos-total-row strong{font-size:18px}
+    .mvi-pos-mini{font-size:12px;color:#64748b;margin-top:4px}
+    .mvi-pos-payment{padding:14px 12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .mvi-pos-payment label{display:block;font-size:12px;color:#65758b;margin-bottom:6px}
+    .mvi-pos-return{margin-top:auto;padding:12px;border-top:1px solid #e1e6ed;display:flex;justify-content:space-between;font-weight:700}
+    .mvi-pos-actions{padding:12px;border-top:1px solid #d7dee8;display:grid;grid-template-columns:1fr;gap:8px}
+    .mvi-pos-action{height:42px;border-radius:6px;border:1px solid #9db1ca;background:#eef4fb;color:#27364d;font-weight:700;cursor:pointer}
+    .mvi-pos-save{background:#b9efd9;border-color:#83d5b8}
+    .mvi-pos-suggest{position:absolute;left:0;right:0;top:43px;background:#fff;border:1px solid #cbd5e1;border-radius:0 0 7px 7px;max-height:270px;overflow:auto;z-index:50;box-shadow:0 8px 24px rgba(15,23,42,.12)}
+    .mvi-pos-suggest button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:10px 12px;border-bottom:1px solid #edf0f4;cursor:pointer}
+    .mvi-pos-suggest button:hover{background:#f5f8fc}
+    .mvi-pos-item-search{position:relative}
+    .mvi-pos-add{border:0;background:#eaf1ff;color:#1d4ed8;border-radius:5px;padding:7px 9px;font-weight:700;cursor:pointer}
+    .mvi-pos-qty{width:68px!important;text-align:center}
+    .mvi-pos-remove{border:0;background:#eef2f7;border-radius:5px;padding:7px 10px;cursor:pointer}
+    @media(max-width:1050px){
+      .mvi-pos{grid-template-columns:minmax(0,1fr) 380px}
+    }
+    @media(max-width:850px){
+      .mvi-pos{display:block;height:auto;min-height:0}
+      .mvi-pos-left{min-height:480px}
+      .mvi-pos-right{margin-top:8px;min-height:470px}
+    }
+  </style>
+  <div class="page-head" style="margin-bottom:8px">
+    <div><h1>Point of Sale (POS)</h1><p>Fast counter billing</p></div>
+    <button class="btn" onclick="clearPOSBill()">+ New Bill [Ctrl+T]</button>
+  </div>
+  <div class="mvi-pos">
+    <section class="mvi-pos-left">
+      <div class="mvi-pos-item-search">
+        <input id="posItemSearch" class="mvi-pos-search" placeholder="Search item by code or name..." autocomplete="off" oninput="renderPOSItemSuggestions()" onkeydown="if(event.key==='Enter')posAddFirstSuggestion()">
+        <div id="posItemSuggestions" class="mvi-pos-suggest" style="display:none"></div>
+      </div>
+      <div class="mvi-pos-table-wrap">
+        <table class="mvi-pos-table">
+          <thead><tr><th>#</th><th>ITEM CODE</th><th>ITEM NAME</th><th>QTY</th><th>UNIT</th><th>PRICE/UNIT(₹)</th><th>DISCOUNT %</th><th>AMOUNT</th><th></th></tr></thead>
+          <tbody id="posItemsBody"><tr><td colspan="9" class="mvi-pos-empty">Search and select an item to add it to the bill.</td></tr></tbody>
+        </table>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px;border-top:1px solid #d7dee8">
+        <button class="mvi-pos-action" onclick="posFocusQty()">Change Quantity [F2]</button>
+        <button class="mvi-pos-action" onclick="posFocusDiscount()">Item Discount [F3]</button>
+        <button class="mvi-pos-action" onclick="posRemoveSelected()">Remove Item [F4]</button>
+        <button class="mvi-pos-action" onclick="posFocusCustomer()">Customer [F11]</button>
+      </div>
+    </section>
+
+    <section class="mvi-pos-right">
+      <div class="mvi-pos-right-head">
+        <input id="posDateDisplay" class="mvi-pos-input mvi-pos-date" type="text" value="${today.split('-').reverse().join('/')}" readonly onclick="posOpenDatePicker()" aria-label="POS Date">
+        <input id="posDate" type="date" value="${today}" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" onchange="posSyncDateDisplay()">
+        <div class="mvi-pos-customer">
+          <select id="posCustomer" class="mvi-pos-input" onchange="posUpdateCustomer()"></select>
+        </div>
+      </div>
+      <div class="mvi-pos-summary">
+        <div class="mvi-pos-total-row"><span>🧾 Total</span><strong id="posTotal">₹ 0.00</strong></div>
+        <div class="mvi-pos-mini">Items: <span id="posItemCount">0</span>, Quantity: <span id="posQtyCount">0</span></div>
+      </div>
+      <div class="mvi-pos-payment">
+        <div><label>Payment Mode</label><select id="posPaymentMode" class="mvi-pos-input" onchange="posCalculateReturn()"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option><option>Credit</option></select></div>
+        <div><label>Amount Received</label><input id="posAmountReceived" class="mvi-pos-input" type="number" min="0" step="0.01" value="0" oninput="posCalculateReturn()"></div>
+      </div>
+      <div class="mvi-pos-return"><span>Change to Return:</span><strong id="posChange">₹ 0.00</strong></div>
+      <div class="mvi-pos-actions">
+        <button class="mvi-pos-action mvi-pos-save" onclick="savePOSBill()">Save &amp; Print Bill [Ctrl+P]</button>
+        <button class="mvi-pos-action" onclick="posSetCreditPayment()">Other/Credit Payments [Ctrl+M]</button>
+      </div>
+    </section>
+  </div>`;
+}
+
+function posLoadCustomers(){
+  const el=document.getElementById('posCustomer');if(!el)return;
+  const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
+  el.innerHTML='<option value="">Walk-in / Cash Customer</option>'+parties.map(p=>`<option value="${escapeAttr(p.id)}">${escapeHtml(p.name||'')}</option>`).join('');
+}
+
+function posGetItems(){
+  return JSON.parse(localStorage.getItem('mviapps_items')||'[]');
+}
+
+function posGetRows(){
+  return [...document.querySelectorAll('#posItemsBody tr[data-pos-row]')];
+}
+
+function posFindStock(itemId){
+  const item=posGetItems().find(i=>String(i.id)===String(itemId));
+  if(!item)return 0;
+  const gs=getGodowns();
+  if(gs.length)syncGodownStockWithClosing(item,gs);
+  return getGodownStock().filter(x=>String(x.itemId)===String(itemId)).reduce((s,x)=>s+(Number(x.qty)||0),0);
+}
+
+function renderPOSItemSuggestions(){
+  const box=document.getElementById('posItemSuggestions'),input=document.getElementById('posItemSearch');if(!box||!input)return;
+  const q=(input.value||'').toLowerCase().trim();
+  if(!q){box.style.display='none';box.innerHTML='';return;}
+  const items=posGetItems().filter(i=>String(i.name||'').toLowerCase().includes(q)||String(i.code||i.itemCode||'').toLowerCase().includes(q)).slice(0,12);
+  box.innerHTML=items.length?items.map(i=>`<button type="button" onclick="posAddItem('${escapeAttr(i.id)}')"><b>${escapeHtml(i.code||i.itemCode||'')}</b> — ${escapeHtml(i.name||'')} <span style="float:right;color:#64748b">${posFindStock(i.id)} ${escapeHtml(i.unit||'')}</span></button>`).join(''):'<div style="padding:12px;color:#64748b">No item found.</div>';
+  box.style.display='block';
+}
+
+function posAddFirstSuggestion(){
+  const first=document.querySelector('#posItemSuggestions button');if(first)first.click();
+}
+
+function posAddItem(itemId){
+  const item=posGetItems().find(i=>String(i.id)===String(itemId));if(!item)return;
+  const body=document.getElementById('posItemsBody');if(!body)return;
+  const existing=body.querySelector(`tr[data-pos-row][data-item-id="${CSS.escape(String(itemId))}"]`);
+  if(existing){
+    const q=existing.querySelector('.pos-row-qty');q.value=Number(q.value||0)+1;posRecalcRow(existing);
+  }else{
+    if(body.querySelector('.mvi-pos-empty'))body.innerHTML='';
+    const tr=document.createElement('tr');tr.dataset.posRow='1';tr.dataset.itemId=item.id;
+    const price=Number(item.salePrice??item.sellingPrice??item.price??item.rate??0)||0;
+    tr.innerHTML=`<td class="pos-row-no"></td><td>${escapeHtml(item.code||item.itemCode||'')}</td><td><b>${escapeHtml(item.name||'')}</b></td><td><input class="mvi-pos-input mvi-pos-qty pos-row-qty" type="number" min="0.01" step="0.01" value="1" oninput="posRecalcRow(this.closest('tr'))"></td><td>${escapeHtml(item.unit||'')}</td><td><input class="mvi-pos-input pos-row-rate" type="number" min="0" step="0.01" value="${price}" oninput="posRecalcRow(this.closest('tr'))"></td><td><input class="mvi-pos-input pos-row-disc" type="number" min="0" max="100" step="0.01" value="0" oninput="posRecalcRow(this.closest('tr'))"></td><td class="pos-row-amount">₹ 0.00</td><td><button class="mvi-pos-remove" onclick="posRemoveRow(this.closest('tr'))">✕</button></td>`;
+    body.appendChild(tr);posRecalcRow(tr);
+  }
+  document.getElementById('posItemSearch').value='';document.getElementById('posItemSuggestions').style.display='none';document.getElementById('posItemSearch').focus();
+  posRefreshNumbers();
+}
+
+function posRecalcRow(tr){
+  if(!tr)return;
+  const q=Number(tr.querySelector('.pos-row-qty')?.value)||0,r=Number(tr.querySelector('.pos-row-rate')?.value)||0,d=Number(tr.querySelector('.pos-row-disc')?.value)||0;
+  const amount=q*r*(1-d/100);const el=tr.querySelector('.pos-row-amount');if(el)el.textContent='₹ '+amount.toFixed(2);
+  posRefreshNumbers();
+}
+
+function posRefreshNumbers(){
+  const rows=posGetRows();let total=0,qty=0;
+  rows.forEach((tr,i)=>{const n=tr.querySelector('.pos-row-no');if(n)n.textContent=i+1;const q=Number(tr.querySelector('.pos-row-qty')?.value)||0,r=Number(tr.querySelector('.pos-row-rate')?.value)||0,d=Number(tr.querySelector('.pos-row-disc')?.value)||0;qty+=q;total+=q*r*(1-d/100);});
+  const t=document.getElementById('posTotal');if(t)t.textContent='₹ '+total.toFixed(2);
+  const ic=document.getElementById('posItemCount');if(ic)ic.textContent=rows.length;
+  const qc=document.getElementById('posQtyCount');if(qc)qc.textContent=qty;
+  posCalculateReturn();
+}
+
+function posCalculateReturn(){
+  const total=posGetTotal(),received=Number(document.getElementById('posAmountReceived')?.value)||0;
+  const change=Math.max(0,received-total);const el=document.getElementById('posChange');if(el)el.textContent='₹ '+change.toFixed(2);
+}
+
+function posGetTotal(){
+  return posGetRows().reduce((s,tr)=>{const q=Number(tr.querySelector('.pos-row-qty')?.value)||0,r=Number(tr.querySelector('.pos-row-rate')?.value)||0,d=Number(tr.querySelector('.pos-row-disc')?.value)||0;return s+q*r*(1-d/100)},0);
+}
+
+function posRemoveRow(tr){
+  tr?.remove();const body=document.getElementById('posItemsBody');if(body&&!posGetRows().length)body.innerHTML='<tr><td colspan="9" class="mvi-pos-empty">Search and select an item to add it to the bill.</td></tr>';posRefreshNumbers();
+}
+
+function posRemoveSelected(){
+  const rows=posGetRows();if(rows.length)posRemoveRow(rows[rows.length-1]);
+}
+
+function posFocusQty(){const r=posGetRows();if(r.length)r[r.length-1].querySelector('.pos-row-qty')?.focus();}
+function posFocusDiscount(){const r=posGetRows();if(r.length)r[r.length-1].querySelector('.pos-row-disc')?.focus();}
+function posFocusCustomer(){document.getElementById('posCustomer')?.focus();}
+function posSetCreditPayment(){const e=document.getElementById('posPaymentMode');if(e)e.value='Credit';posCalculateReturn();posFocusCustomer();}
+
+function posOpenDatePicker(){
+  const e=document.getElementById('posDate');if(!e)return;
+  try{e.focus({preventScroll:true});if(typeof e.showPicker==='function')e.showPicker();else e.click();}catch(err){try{e.click();}catch(ignore){}}
+}
+function posSyncDateDisplay(){const p=document.getElementById('posDate'),d=document.getElementById('posDateDisplay');if(p&&d)d.value=p.value?p.value.split('-').reverse().join('/'):'';}
+
+function clearPOSBill(){
+  const s=document.getElementById('posItemSearch');if(s)s.value='';
+  const b=document.getElementById('posItemsBody');if(b)b.innerHTML='<tr><td colspan="9" class="mvi-pos-empty">Search and select an item to add it to the bill.</td></tr>';
+  const a=document.getElementById('posAmountReceived');if(a)a.value='0';
+  const p=document.getElementById('posPaymentMode');if(p)p.value='Cash';
+  const d=document.getElementById('posDate'),dd=document.getElementById('posDateDisplay');const today=new Date().toISOString().slice(0,10);if(d)d.value=today;if(dd)dd.value=today.split('-').reverse().join('/');
+  posRefreshNumbers();
+  posLoadCustomers();
+  s?.focus();
+}
+
+function posPrintBill(record){
+  const party=record.customerName||'Walk-in / Cash Customer';
+  const win=window.open('','_blank');if(!win){alert('Please allow pop-ups to print the POS bill.');return;}
+  const rows=record.items.map((it,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(it.itemName||'')}</td><td>${it.qty}</td><td>₹ ${Number(it.rate).toFixed(2)}</td><td>₹ ${Number(it.amount).toFixed(2)}</td></tr>`).join('');
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(record.invoiceNo)}</title><style>@page{size:80mm auto;margin:4mm}body{font-family:Arial,sans-serif;font-size:11px;margin:0;color:#111}.c{text-align:center}.line{border-top:1px dashed #555;margin:7px 0}table{width:100%;border-collapse:collapse}td,th{padding:4px 1px;text-align:left}th:nth-child(n+3),td:nth-child(n+3){text-align:right}.total{font-size:15px;font-weight:800;text-align:right}</style></head><body><div class="c"><b>MVIApps</b><br>POS BILL</div><div class="line"></div><div>Bill: ${escapeHtml(record.invoiceNo)}<br>Date: ${escapeHtml(record.date.split('-').reverse().join('/'))}<br>Customer: ${escapeHtml(party)}</div><div class="line"></div><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead><tbody>${rows}</tbody></table><div class="line"></div><div class="total">Total: ₹ ${Number(record.total).toFixed(2)}</div><div>Payment: ${escapeHtml(record.paymentMode)}</div></body></html>`);
+  win.document.close();win.focus();setTimeout(()=>{win.print();setTimeout(()=>win.close(),500)},300);
+}
+
+function savePOSBill(){
+  if(!ensureEntryDateInActiveFY(document.getElementById('posDate')?.value,'Date'))return;
+  const rows=posGetRows();if(!rows.length){alert('Please add at least one item.');return;}
+  const customerId=document.getElementById('posCustomer')?.value||'';
+  const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
+  const party=parties.find(p=>String(p.id)===String(customerId));
+  const paymentMode=document.getElementById('posPaymentMode')?.value||'Cash';
+  const total=posGetTotal(),received=Number(document.getElementById('posAmountReceived')?.value)||0;
+  if(paymentMode==='Credit'&&!customerId){alert('Please select a customer for Credit payment.');return;}
+  if(paymentMode!=='Credit'&&received<total){alert('Amount Received is less than the bill total.');return;}
+
+  const items=posGetItems(),invoices=JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]');
+  const invoiceNo=typeof getNextAutoNumber==='function'?getNextAutoNumber('mviapps_sales_invoices','POS'):('POS-'+String(invoices.length+1).padStart(4,'0'));
+  const saleItems=rows.map(tr=>{
+    const item=items.find(i=>String(i.id)===String(tr.dataset.itemId));
+    const q=Number(tr.querySelector('.pos-row-qty')?.value)||0,r=Number(tr.querySelector('.pos-row-rate')?.value)||0,d=Number(tr.querySelector('.pos-row-disc')?.value)||0;
+    return {itemId:item?.id||tr.dataset.itemId,itemName:item?.name||'',godownId:'',qty:q,rate:r,discount:d,gst:0,amount:q*r*(1-d/100)};
+  });
+
+  // POS consumes stock from the same stock pool used by the existing Sale module.
+  const gs=getGodowns(),stock=getGodownStock();
+  for(const it of saleItems){
+    const item=items.find(i=>String(i.id)===String(it.itemId));
+    const available=posFindStock(it.itemId);
+    if(it.qty>available){alert(`Insufficient stock for ${item?.name||'item'}. Available quantity is ${available} ${item?.unit||''}.`);return;}
+    const godown=gs.find(g=>Number(stock.find(s=>String(s.itemId)===String(it.itemId)&&String(s.godownId)===String(g.id))?.qty||0)>=it.qty) || gs.find(g=>Number(stock.find(s=>String(s.itemId)===String(it.itemId)&&String(s.godownId)===String(g.id))?.qty||0)>0);
+    if(godown){it.godownId=godown.id;const rec=stock.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(godown.id));if(rec)rec.qty=(Number(rec.qty)||0)-it.qty;}
+  }
+  saveGodownStock(stock);
+
+  const date=document.getElementById('posDate')?.value||new Date().toISOString().slice(0,10);
+  const record={id:Date.now(),customer:customerId,customerName:party?.name||'Walk-in / Cash Customer',date,invoiceNo,paymentMode,bankAccount:'',reference:'',dueDate:'',notes:'POS Sale',items:saleItems,total};
+  invoices.push(record);localStorage.setItem('mviapps_sales_invoices',JSON.stringify(invoices));
+
+  let moves=JSON.parse(localStorage.getItem('mviapps_stock_movements')||'[]');
+  saleItems.forEach(it=>moves.push({id:Date.now()+Math.random(),date,itemId:it.itemId,qty:it.qty,type:'sale',ref:invoiceNo,godownId:it.godownId||''}));
+  localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves));
+
+  alert('POS bill saved successfully.');
+  posPrintBill(record);
+  clearPOSBill();
+}
+
+function initPointOfSale(){
+  posLoadCustomers();posRefreshNumbers();
+  document.getElementById('posItemSearch')?.focus();
+  document.removeEventListener('keydown',mviPOSKeyHandler);
+  document.addEventListener('keydown',mviPOSKeyHandler);
+}
+function mviPOSKeyHandler(e){
+  if(!document.getElementById('posItemSearch'))return;
+  if(e.ctrlKey&&e.key.toLowerCase()==='t'){e.preventDefault();clearPOSBill();}
+  if(e.ctrlKey&&e.key.toLowerCase()==='p'){e.preventDefault();savePOSBill();}
+  if(e.ctrlKey&&e.key.toLowerCase()==='m'){e.preventDefault();posSetCreditPayment();}
+  if(e.key==='F2'){e.preventDefault();posFocusQty();}
+  if(e.key==='F3'){e.preventDefault();posFocusDiscount();}
+  if(e.key==='F4'){e.preventDefault();posRemoveSelected();}
+  if(e.key==='F11'){e.preventDefault();posFocusCustomer();}
+}
+
 function saleInvoices(){
   return `<div class="page-head"><div><h1>Sales Invoices</h1><p>View, search, print, modify and delete your saved sales invoices.</p></div><button class="btn" onclick="newSaleInvoice()">+ New Sale</button></div>
   <div class="panel"><div class="toolbar sale-invoice-filter-toolbar"><input class="input sale-invoice-search" id="saleInvoiceSearch" placeholder="Search invoice no. or customer..." oninput="renderSaleInvoices()"><div class="sale-filter-date-group"><div class="sale-filter-date-wrap"><span class="sale-filter-date-label">From</span><input class="input" id="saleInvoiceFromDisplay" type="text" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareSaleInvoiceFilterManualDate('from')" oninput="formatSaleInvoiceFilterDateInput(this)" onblur="syncSaleInvoiceFilterManualDate('from')"><button type="button" class="sale-filter-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openSaleInvoiceFilterDatePicker('from')">&#128197;</button><input id="saleInvoiceFrom" type="date" onchange="syncSaleInvoiceFilterDateDisplay('from');renderSaleInvoices()" aria-label="Select from date"></div><div class="sale-filter-date-wrap"><span class="sale-filter-date-label">To</span><input class="input" id="saleInvoiceToDisplay" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareSaleInvoiceFilterManualDate('to')" oninput="formatSaleInvoiceFilterDateInput(this)" onblur="syncSaleInvoiceFilterManualDate('to')"><button type="button" class="sale-filter-calendar-btn" aria-label="Open To Date calendar" title="Select date" onclick="openSaleInvoiceFilterDatePicker('to')">&#128197;</button><input id="saleInvoiceTo" type="date" onchange="syncSaleInvoiceFilterDateDisplay('to');renderSaleInvoices()" aria-label="Select to date"></div></div></div>
@@ -7451,6 +7720,7 @@ function show(id,btn){ window._mviappsCurrentPage=id; window._mviappsCurrentBtn=
   }
   if(id==='check-item-availability'){setTimeout(()=>{if(typeof initQuickItemAvailability==='function')initQuickItemAvailability();},0);}
   if(id==='item-details' && typeof renderItems==='function')renderItems();
+  if(id==='point-of-sale'){setTimeout(()=>{if(typeof initPointOfSale==='function')initPointOfSale();},0);}
   if(id==='stock-summary' && typeof renderStockSummary==='function')renderStockSummary();
   if(id==='stock-ledger' && typeof renderStockLedger==='function')renderStockLedger();
   if(id==='godown-management' && typeof initGodownPage==='function')initGodownPage();if(id==='receivable' && typeof renderReceivable==='function')setTimeout(renderReceivable,0);if(id==='payable' && typeof renderPayable==='function')setTimeout(renderPayable,0);
