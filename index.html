@@ -2371,7 +2371,7 @@ function salePurchasePartyReport(){
   return `<div class="page-head"><div><div class="report-kicker">Party Report</div><h1>Sale / Purchase by Party</h1><p>Party-wise sale and purchase summary for the selected period.</p></div><div style="display:flex;gap:8px"><button class="btn secondary" onclick="exportSalePurchasePartyCSV()">Excel Report</button><button class="btn print-pdf-btn" onclick="printSalePurchaseParty()">Print / Save PDF</button></div></div>
   <div class="panel" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <div style="font-size:18px;font-weight:700;color:#243b53">This Month</div>
-    <div style="display:flex;align-items:center;border:1px solid #d0d5dd;border-radius:5px;overflow:hidden;background:#fff"><span style="background:#aaa;color:#fff;padding:8px 10px;font-weight:700;font-size:12px">Between</span><div class="pl-date-wrap" style="border:0;border-radius:0"><input id="spFromDisplay" class="input" type="text" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('sp','from')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('sp','from')" style="border:0;border-radius:0;padding:8px 38px 8px 10px;width:150px"><button type="button" class="pl-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openReportDatePicker('sp','from')">&#128197;</button><input id="spFrom" type="date" aria-label="Select From Date" onchange="syncReportDateDisplay('sp','from')"></div><span style="padding:0 8px;color:#475467;font-size:12px">To</span><div class="pl-date-wrap" style="border:0;border-radius:0"><input id="spToDisplay" class="input" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('sp','to')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('sp','to')" style="border:0;border-radius:0;padding:8px 38px 8px 10px;width:150px"><button type="button" class="pl-calendar-btn" aria-label="Open To Date calendar" title="Select date" onclick="openReportDatePicker('sp','to')">&#128197;</button><input id="spTo" type="date" aria-label="Select To Date" onchange="syncReportDateDisplay('sp','to')"></div></div>
+    <div style="display:flex;align-items:center;border:1px solid #d0d5dd;border-radius:5px;overflow:hidden;background:#fff"><span style="background:#aaa;color:#fff;padding:8px 10px;font-weight:700;font-size:12px">Between</span><div class="pl-date-wrap" style="border:0;border-radius:0"><input id="spFromDisplay" class="input" type="text" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('sp','from')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('sp','from');renderSalePurchasePartyReport()" style="border:0;border-radius:0;padding:8px 38px 8px 10px;width:150px"><button type="button" class="pl-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openReportDatePicker('sp','from')">&#128197;</button><input id="spFrom" type="date" aria-label="Select From Date" onchange="syncReportDateDisplay('sp','from');renderSalePurchasePartyReport()"></div><span style="padding:0 8px;color:#475467;font-size:12px">To</span><div class="pl-date-wrap" style="border:0;border-radius:0"><input id="spToDisplay" class="input" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('sp','to')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('sp','to');renderSalePurchasePartyReport()" style="border:0;border-radius:0;padding:8px 38px 8px 10px;width:150px"><button type="button" class="pl-calendar-btn" aria-label="Open To Date calendar" title="Select date" onclick="openReportDatePicker('sp','to')">&#128197;</button><input id="spTo" type="date" aria-label="Select To Date" onchange="syncReportDateDisplay('sp','to');renderSalePurchasePartyReport()"></div></div>
     <select id="spFirm" class="select" style="width:135px"><option>All Firms</option></select>
     <select id="spGodown" class="select" style="width:135px"><option>All Godown</option></select>
   </div></div>
@@ -2391,14 +2391,8 @@ function getPartyReportName(x){
 function renderSalePurchasePartyReport(){
   const rows=document.getElementById('spRows'); if(!rows)return;
   const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
-
-  // IMPORTANT: Read directly from the same invoice collections used by
-  // Sale Invoices and Purchase Invoices. Do not fall back to the legacy
-  // mviapps_sales / mviapps_purchases collections, because those can be
-  // incomplete and cause some parties to disappear from this report.
   const sales=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]'));
   const purchases=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_purchase_invoices')||'[]'));
-
   const from=document.getElementById('spFrom')?.value||'';
   const to=document.getElementById('spTo')?.value||'';
   const q=(document.getElementById('spSearch')?.value||'').toLowerCase().trim();
@@ -2414,8 +2408,6 @@ function renderSalePurchasePartyReport(){
     return (!from||!d||d>=from)&&(!to||!d||d<=to);
   };
 
-  // Use the saved invoice total (Grand Total) exactly as shown in the
-  // corresponding Sale/Purchase Invoice list.
   sales.filter(inRange).forEach(x=>{
     const n=getPartyReportName(x);
     if(!n)return;
@@ -2437,7 +2429,6 @@ function renderSalePurchasePartyReport(){
     .sort((a,b)=>a.name.localeCompare(b.name));
 
   document.getElementById('spCount').textContent=`${data.length} parties`;
-
   rows.innerHTML=data.length
     ?data.map((x,i)=>`<tr><td>${i+1}</td><td><b>${escapeHtml(x.name)}</b></td><td class="num" style="color:${x.sale?'#ef4444':'inherit'}">${x.sale?'₹ '+x.sale.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td><td class="num" style="color:${x.purchase?'#ef4444':'inherit'}">${x.purchase?'₹ '+x.purchase.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td></tr>`).join('')
     :`<tr><td colspan="4" class="empty">No party transactions found.</td></tr>`;
