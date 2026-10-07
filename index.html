@@ -2392,9 +2392,10 @@ function renderSalePurchasePartyReport(){
   const rows=document.getElementById('spRows'); if(!rows)return;
   const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
 
-  // Use the actual saved Sale/Purchase Invoice collections.
-  // Do not use the older mviapps_sales / mviapps_purchases keys because they
-  // can contain stale or differently structured data.
+  // IMPORTANT: Read directly from the same invoice collections used by
+  // Sale Invoices and Purchase Invoices. Do not fall back to the legacy
+  // mviapps_sales / mviapps_purchases collections, because those can be
+  // incomplete and cause some parties to disappear from this report.
   const sales=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]'));
   const purchases=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_purchase_invoices')||'[]'));
 
@@ -2413,13 +2414,14 @@ function renderSalePurchasePartyReport(){
     return (!from||!d||d>=from)&&(!to||!d||d<=to);
   };
 
-  // Sale/Purchase invoices store the final Grand Total in x.total.
+  // Use the saved invoice total (Grand Total) exactly as shown in the
+  // corresponding Sale/Purchase Invoice list.
   sales.filter(inRange).forEach(x=>{
     const n=getPartyReportName(x);
     if(!n)return;
     const k=n.toLowerCase();
     if(!map[k])map[k]={name:n,sale:0,purchase:0};
-    map[k].sale+=plAmount(x);
+    map[k].sale += plAmount(x);
   });
 
   purchases.filter(inRange).forEach(x=>{
@@ -2427,7 +2429,7 @@ function renderSalePurchasePartyReport(){
     if(!n)return;
     const k=n.toLowerCase();
     if(!map[k])map[k]={name:n,sale:0,purchase:0};
-    map[k].purchase+=plAmount(x);
+    map[k].purchase += plAmount(x);
   });
 
   const data=Object.values(map)
@@ -2435,6 +2437,7 @@ function renderSalePurchasePartyReport(){
     .sort((a,b)=>a.name.localeCompare(b.name));
 
   document.getElementById('spCount').textContent=`${data.length} parties`;
+
   rows.innerHTML=data.length
     ?data.map((x,i)=>`<tr><td>${i+1}</td><td><b>${escapeHtml(x.name)}</b></td><td class="num" style="color:${x.sale?'#ef4444':'inherit'}">${x.sale?'₹ '+x.sale.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td><td class="num" style="color:${x.purchase?'#ef4444':'inherit'}">${x.purchase?'₹ '+x.purchase.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td></tr>`).join('')
     :`<tr><td colspan="4" class="empty">No party transactions found.</td></tr>`;
