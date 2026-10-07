@@ -5181,6 +5181,8 @@ function autoFillDocumentNumbers(){
 function pointOfSalePage(){
   const today=new Date().toISOString().slice(0,10);
   return `<style>
+    .mvi-pos-fullscreen{position:fixed;inset:0;z-index:9999;background:#f5f7fb;padding:8px;box-sizing:border-box;overflow:auto}
+    .mvi-pos-fullscreen .mvi-pos{height:calc(100vh - 54px);min-height:0}
     .mvi-pos{display:grid;grid-template-columns:minmax(0,1fr) 450px;gap:6px;height:calc(100vh - 132px);min-height:560px}
     .mvi-pos-left,.mvi-pos-right{background:#fff;border:1px solid #d7dee8;border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
     .mvi-pos-search{height:42px;border:0;border-bottom:1px solid #d7dee8;padding:0 14px;font-size:15px;outline:none;width:100%}
@@ -5216,16 +5218,21 @@ function pointOfSalePage(){
       .mvi-pos{grid-template-columns:minmax(0,1fr) 380px}
     }
     @media(max-width:850px){
+      .mvi-pos-fullscreen .mvi-pos{height:auto;min-height:0}
       .mvi-pos{display:block;height:auto;min-height:0}
       .mvi-pos-left{min-height:480px}
       .mvi-pos-right{margin-top:8px;min-height:470px}
     }
   </style>
-  <div class="page-head" style="margin-bottom:8px">
-    <div><h1>Point of Sale (POS)</h1><p>Fast counter billing</p></div>
-    <button class="btn" onclick="clearPOSBill()">+ New Bill [Ctrl+T]</button>
-  </div>
-  <div class="mvi-pos">
+  <div id="mviPosFullscreen" class="mvi-pos-fullscreen">
+    <div class="page-head" style="margin-bottom:8px">
+      <div><h1>Point of Sale (POS)</h1><p>Fast counter billing</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="clearPOSBill()">+ New Bill [Ctrl+T]</button>
+        <button class="btn" onclick="exitPOSFullScreen()">← Back to MVIApps</button>
+      </div>
+    </div>
+    <div class="mvi-pos">
     <section class="mvi-pos-left">
       <div class="mvi-pos-item-search">
         <input id="posItemSearch" class="mvi-pos-search" placeholder="Search item by code or name..." autocomplete="off" oninput="renderPOSItemSuggestions()" onkeydown="if(event.key==='Enter')posAddFirstSuggestion()">
@@ -5267,7 +5274,13 @@ function pointOfSalePage(){
         <button class="mvi-pos-action" onclick="posSetCreditPayment()">Other/Credit Payments [Ctrl+M]</button>
       </div>
     </section>
-  </div>`;
+  </div></div>`;
+}
+
+function exitPOSFullScreen(){
+  const el=document.getElementById('mviPosFullscreen');
+  if(el)el.remove();
+  try{show('sale-invoices');}catch(e){}
 }
 
 function posLoadCustomers(){
