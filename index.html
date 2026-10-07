@@ -2391,19 +2391,53 @@ function getPartyReportName(x){
 function renderSalePurchasePartyReport(){
   const rows=document.getElementById('spRows'); if(!rows)return;
   const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
-  const sales=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_sales')||localStorage.getItem('mviapps_sale_invoices')||'[]'));
-  const purchases=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_purchases')||localStorage.getItem('mviapps_purchase_invoices')||'[]'));
+
+  // Use the actual saved Sale/Purchase Invoice collections.
+  // Do not use the older mviapps_sales / mviapps_purchases keys because they
+  // can contain stale or differently structured data.
+  const sales=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]'));
+  const purchases=filterByActiveFinancialYear(JSON.parse(localStorage.getItem('mviapps_purchase_invoices')||'[]'));
+
   const from=document.getElementById('spFrom')?.value||'';
   const to=document.getElementById('spTo')?.value||'';
   const q=(document.getElementById('spSearch')?.value||'').toLowerCase().trim();
   const map={};
-  parties.forEach(p=>{const name=String(p.name||'').trim(); if(name)map[name.toLowerCase()]={name,sale:0,purchase:0};});
-  const inRange=x=>{const d=getReportTxDate(x); return (!from||!d||d>=from)&&(!to||!d||d<=to);};
-  sales.filter(inRange).forEach(x=>{const n=getPartyReportName(x); if(!n)return; const k=n.toLowerCase(); if(!map[k])map[k]={name:n,sale:0,purchase:0}; map[k].sale+=parseMoney(x.total??x.amount??x.grandTotal??x.netAmount??0);});
-  purchases.filter(inRange).forEach(x=>{const n=getPartyReportName(x); if(!n)return; const k=n.toLowerCase(); if(!map[k])map[k]={name:n,sale:0,purchase:0}; map[k].purchase+=parseMoney(x.total??x.amount??x.grandTotal??x.netAmount??0);});
-  const data=Object.values(map).filter(x=>!q||x.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+
+  parties.forEach(p=>{
+    const name=String(p.name||'').trim();
+    if(name)map[name.toLowerCase()]={name,sale:0,purchase:0};
+  });
+
+  const inRange=x=>{
+    const d=getReportTxDate(x);
+    return (!from||!d||d>=from)&&(!to||!d||d<=to);
+  };
+
+  // Sale/Purchase invoices store the final Grand Total in x.total.
+  sales.filter(inRange).forEach(x=>{
+    const n=getPartyReportName(x);
+    if(!n)return;
+    const k=n.toLowerCase();
+    if(!map[k])map[k]={name:n,sale:0,purchase:0};
+    map[k].sale+=plAmount(x);
+  });
+
+  purchases.filter(inRange).forEach(x=>{
+    const n=getPartyReportName(x);
+    if(!n)return;
+    const k=n.toLowerCase();
+    if(!map[k])map[k]={name:n,sale:0,purchase:0};
+    map[k].purchase+=plAmount(x);
+  });
+
+  const data=Object.values(map)
+    .filter(x=>!q||x.name.toLowerCase().includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+
   document.getElementById('spCount').textContent=`${data.length} parties`;
-  rows.innerHTML=data.length?data.map((x,i)=>`<tr><td>${i+1}</td><td><b>${escapeHtml(x.name)}</b></td><td class="num" style="color:${x.sale?'#ef4444':'inherit'}">${x.sale?'₹ '+x.sale.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td><td class="num" style="color:${x.purchase?'#ef4444':'inherit'}">${x.purchase?'₹ '+x.purchase.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td></tr>`).join(''):`<tr><td colspan="4" class="empty">No party transactions found.</td></tr>`;
+  rows.innerHTML=data.length
+    ?data.map((x,i)=>`<tr><td>${i+1}</td><td><b>${escapeHtml(x.name)}</b></td><td class="num" style="color:${x.sale?'#ef4444':'inherit'}">${x.sale?'₹ '+x.sale.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td><td class="num" style="color:${x.purchase?'#ef4444':'inherit'}">${x.purchase?'₹ '+x.purchase.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'---'}</td></tr>`).join('')
+    :`<tr><td colspan="4" class="empty">No party transactions found.</td></tr>`;
 }
 function printSalePurchaseParty(){
   const table=document.querySelector('#report-sale-purchase-party #spRows')?.closest('table') || document.getElementById('spRows')?.closest('table');
