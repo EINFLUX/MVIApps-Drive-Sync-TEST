@@ -1895,7 +1895,6 @@ function openPOSItemModifyPopup(tr){
       <div class="mvi-pos-modify-head">
         <h3 id="mviPosModifyTitle">Modify Item</h3>
         <div class="mvi-pos-modify-head-actions">
-          <button type="button" class="mvi-pos-modify-scale" title="Weighing scale connection is not changed by this POS update.">Connect Weighing Scale ›</button>
           <button type="button" class="mvi-pos-modify-close" onclick="closePOSItemModifyPopup()" aria-label="Close">×</button>
         </div>
       </div>
@@ -5511,7 +5510,7 @@ function pointOfSalePage(){
       </div>
       <div class="mvi-pos-payment">
         <div><label>Payment Mode</label><select id="posPaymentMode" class="mvi-pos-input" onchange="posPaymentModeChanged()"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option><option>Credit</option></select></div>
-        <div><label>Amount Received</label><input id="posAmountReceived" class="mvi-pos-input" type="number" min="0" step="0.01" value="0" oninput="posCalculateReturn()"></div>
+        <div><label>Amount Received</label><input id="posAmountReceived" class="mvi-pos-input" type="number" min="0" step="0.01" value="0" oninput="posCalculateReturn()"><label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:12px"><input id="posFullAmount" type="checkbox" onchange="posUseFullAmount(this)"> Full Bill Amount</label></div>
         <div id="posBankWrap" style="display:none"><label>Bank Account</label><select id="posBankAccount" class="mvi-pos-input"><option value="">Select Bank Account</option></select></div>
         <div><label>Reference No.</label><input id="posReference" class="mvi-pos-input" placeholder="Optional reference"></div>
         <div id="posDueDateWrap" style="display:none"><label>Due Date</label><input id="posDueDate" class="mvi-pos-input" type="date"></div>
@@ -5622,8 +5621,24 @@ function posRefreshNumbers(){
   const rows=posGetRows();let total=0,qty=0;
   rows.forEach((tr,i)=>{const n=tr.querySelector('.pos-row-no');if(n)n.textContent=i+1;const q=Number(tr.querySelector('.pos-row-qty')?.value)||0,r=Number(tr.querySelector('.pos-row-rate')?.value)||0,d=Number(tr.querySelector('.pos-row-disc')?.value)||0;qty+=q;total+=q*r*(1-d/100);});
   const t=document.getElementById('posTotal');if(t)t.textContent='₹ '+total.toFixed(2);
+  const full=document.getElementById('posFullAmount'),received=document.getElementById('posAmountReceived');
+  if(full?.checked && received){received.value=total.toFixed(2);received.readOnly=true;}
   const ic=document.getElementById('posItemCount');if(ic)ic.textContent=rows.length;
   const qc=document.getElementById('posQtyCount');if(qc)qc.textContent=qty;
+  posCalculateReturn();
+}
+
+function posUseFullAmount(box){
+  const received=document.getElementById('posAmountReceived');
+  if(!received)return;
+  if(box?.checked){
+    received.value=posGetTotal().toFixed(2);
+    received.readOnly=true;
+  }else{
+    received.readOnly=false;
+    received.focus();
+    received.select();
+  }
   posCalculateReturn();
 }
 
