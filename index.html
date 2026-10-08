@@ -7508,6 +7508,7 @@ function appearanceSettings(){return settingsPage('Appearance','Personalize the 
 ])} 
 
 function securitySettings(){return settingsPage('Security','Protect app access and manage users who can open MVIApps.',[
+  settingSection('Change My Login Details','Change the User ID and/or Password used to open MVIApps. Your current password is required for security.',`<div class="formgrid"><div class="field"><label>Current Password</label><input id="mviChangeCurrentPassword" type="password" placeholder="Enter current password" autocomplete="current-password"></div><div class="field"><label>New User ID</label><input id="mviChangeUserId" type="text" placeholder="Leave blank to keep current User ID" autocomplete="off"></div><div class="field"><label>New Password</label><input id="mviChangePassword" type="password" placeholder="Leave blank to keep current password" autocomplete="new-password"></div><div class="field"><label>Confirm New Password</label><input id="mviChangePasswordConfirm" type="password" placeholder="Confirm new password" autocomplete="new-password"></div></div><div style="margin-top:12px;display:flex;justify-content:flex-end"><button type="button" class="btn" onclick="mviappsChangeMyLoginDetails()">Save Login Details</button></div><div id="mviappsChangeLoginMsg" class="settings-note" style="display:none;margin-top:12px"></div>`),
   settingSection('User Management','Only the Admin can add or remove users. Each user gets a separate User ID, Password and Role.',`<div class="formgrid"><div class="field"><label>User ID</label><input id="mviNewUserId" type="text" placeholder="Enter User ID" autocomplete="off"></div><div class="field"><label>User Name</label><input id="mviNewUserName" type="text" placeholder="Enter user name"></div><div class="field"><label>Password</label><input id="mviNewUserPassword" type="password" placeholder="Minimum 4 characters" autocomplete="new-password"></div><div class="field"><label>Role</label><select id="mviNewUserRole"><option>Administrator</option><option>Staff</option><option>Viewer</option></select></div></div><div style="margin-top:12px;display:flex;justify-content:flex-end"><button type="button" class="btn" onclick="mviappsAddUser()">+ Add User</button></div><div id="mviappsUserList" style="margin-top:18px"></div>`),
   settingSection('Session & Safety','Basic protection against accidental or unattended access.',`<div class="formgrid">${settingSelect('Auto Lock','autoLock',['Off','5 Minutes','10 Minutes','15 Minutes','30 Minutes'])}${settingSelect('Confirm Before Delete','confirmDelete',['Yes','No'])}</div>`),
   `<div class="settings-note warning"><b>Security reminder</b><span>User passwords are stored as hashes in this browser. This is local app-level protection, not server-side authentication.</span></div>`
@@ -8651,6 +8652,39 @@ async function mviappsAddUser(){
   ['mviNewUserId','mviNewUserName','mviNewUserPassword'].forEach(x=>{const e=document.getElementById(x);if(e)e.value='';});
   mviappsRenderUserList();
   alert('User added successfully.');
+}
+async function mviappsChangeMyLoginDetails(){
+  const current=(document.getElementById('mviChangeCurrentPassword')?.value||'');
+  const newId=(document.getElementById('mviChangeUserId')?.value||'').trim();
+  const newPass=(document.getElementById('mviChangePassword')?.value||'');
+  const confirmPass=(document.getElementById('mviChangePasswordConfirm')?.value||'');
+  const note=document.getElementById('mviappsChangeLoginMsg');
+  const show=(text,ok)=>{if(note){note.style.display='flex';note.className='settings-note '+(ok?'':'warning');note.innerHTML='<b>'+(ok?'Success':'Cannot save')+'</b><span>'+text+'</span>';}};
+  const user=mviappsCurrentUser();
+  if(!user){show('Please log in again before changing login details.',false);return;}
+  if(!current){show('Please enter your current password.',false);return;}
+  if(!newId && !newPass){show('Please enter a new User ID or a new Password.',false);return;}
+  if(newPass && newPass.length<4){show('New Password must be at least 4 characters.',false);return;}
+  if(newPass!==confirmPass){show('New Password and Confirm New Password do not match.',false);return;}
+  const currentHash=await mviappsHashPassword(current);
+  if(String(user.hash)!==String(currentHash)){show('Current password is incorrect.',false);return;}
+  const users=mviappsGetUsers();
+  const index=users.findIndex(u=>String(u.username)===String(user.username));
+  if(index<0){show('Current user could not be found.',false);return;}
+  if(newId && newId.toLowerCase()!==String(user.username).toLowerCase() && users.some(u=>String(u.username).toLowerCase()===newId.toLowerCase())){show('This User ID already exists.',false);return;}
+  const updated={...users[index]};
+  if(newId)updated.username=newId;
+  if(newPass)updated.hash=await mviappsHashPassword(newPass);
+  users[index]=updated;
+  mviappsSaveUsers(users);
+  sessionStorage.setItem('mviapps_login_session_v1',updated.username);
+  const fields=['mviChangeCurrentPassword','mviChangeUserId','mviChangePassword','mviChangePasswordConfirm'];
+  fields.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const avatar=document.getElementById('mviappsTopAvatar'),name=document.getElementById('mviappsTopUser');
+  if(name)name.textContent=updated.username;
+  if(avatar)avatar.textContent=String(updated.username||'A').trim().charAt(0).toUpperCase()||'A';
+  show('Your login details have been updated successfully.',true);
+  if(typeof mviappsRenderUserList==='function')mviappsRenderUserList();
 }
 function mviappsDeleteUser(index){
   if(!mviappsIsAdmin()){alert('Only an Admin can delete users.');return;}
