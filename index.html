@@ -5316,11 +5316,15 @@ function posFindStock(itemId){
   return getGodownStock().filter(x=>String(x.itemId)===String(itemId)).reduce((s,x)=>s+(Number(x.qty)||0),0);
 }
 
+function posGetItemBarcode(item){
+  return String(item?.barcode ?? item?.barCode ?? item?.Barcode ?? item?.itemBarcode ?? item?.sku ?? '').trim();
+}
+
 function renderPOSItemSuggestions(){
   const box=document.getElementById('posItemSuggestions'),input=document.getElementById('posItemSearch');if(!box||!input)return;
   const q=(input.value||'').toLowerCase().trim();
   if(!q){box.style.display='none';box.innerHTML='';return;}
-  const items=posGetItems().filter(i=>String(i.name||'').toLowerCase().includes(q)||String(i.code||i.itemCode||'').toLowerCase().includes(q)).slice(0,12);
+  const items=posGetItems().filter(i=>String(i.name||'').toLowerCase().includes(q)||String(i.code||i.itemCode||'').toLowerCase().includes(q)||posGetItemBarcode(i).toLowerCase().includes(q)).slice(0,12);
   box.innerHTML=items.length?items.map(i=>`<button type="button" onclick="posAddItem('${escapeAttr(i.id)}')"><b>${escapeHtml(i.code||i.itemCode||'')}</b> — ${escapeHtml(i.name||'')} <span style="float:right;color:#64748b">${posFindStock(i.id)} ${escapeHtml(i.unit||'')}</span></button>`).join(''):'<div style="padding:12px;color:#64748b">No item found.</div>';
   box.style.display='block';
 }
@@ -5329,7 +5333,7 @@ function posAddFirstSuggestion(){
   const input=document.getElementById('posItemSearch');
   const q=String(input?.value||'').trim().toLowerCase();
   if(q){
-    const exact=posGetItems().find(i=>String(i.code||i.itemCode||'').trim().toLowerCase()===q);
+    const exact=posGetItems().find(i=>String(i.code||i.itemCode||'').trim().toLowerCase()===q||posGetItemBarcode(i).toLowerCase()===q);
     if(exact){posAddItem(exact.id);return;}
   }
   const first=document.querySelector('#posItemSuggestions button');if(first)first.click();
