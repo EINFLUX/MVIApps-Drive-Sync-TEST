@@ -5228,14 +5228,17 @@ function pointOfSalePage(){
     <div class="page-head" style="margin-bottom:8px">
       <div><h1>Point of Sale (POS)</h1><p>Fast counter billing</p></div>
       <div style="display:flex;gap:8px">
-        <button class="btn" onclick="clearPOSBill()">+ New Bill [Ctrl+T]</button>
+        <button class="btn" onclick="clearPOSBill(false)">+ New Bill [Ctrl+T]</button>
+        <button class="btn" onclick="posHoldBill()">Hold Bill [Ctrl+H]</button>
+        <button class="btn" onclick="posRecallBill()">Recall Bill [Ctrl+R]</button>
+        <button class="btn" onclick="posBillHistory()">Bill History [Ctrl+B]</button>
         <button class="btn" onclick="exitPOSFullScreen()">← Back to MVIApps</button>
       </div>
     </div>
     <div class="mvi-pos">
     <section class="mvi-pos-left">
       <div class="mvi-pos-item-search">
-        <input id="posItemSearch" class="mvi-pos-search" placeholder="Search item by code or name..." autocomplete="off" oninput="renderPOSItemSuggestions()" onkeydown="if(event.key==='Enter')posAddFirstSuggestion()">
+        <input id="posItemSearch" class="mvi-pos-search" placeholder="Search / scan item code or name..." autocomplete="off" oninput="renderPOSItemSuggestions()" onkeydown="if(event.key==='Enter')posAddFirstSuggestion()">
         <div id="posItemSuggestions" class="mvi-pos-suggest" style="display:none"></div>
       </div>
       <div class="mvi-pos-table-wrap">
@@ -5265,13 +5268,16 @@ function pointOfSalePage(){
         <div class="mvi-pos-mini">Items: <span id="posItemCount">0</span>, Quantity: <span id="posQtyCount">0</span></div>
       </div>
       <div class="mvi-pos-payment">
-        <div><label>Payment Mode</label><select id="posPaymentMode" class="mvi-pos-input" onchange="posCalculateReturn()"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option><option>Credit</option></select></div>
+        <div><label>Payment Mode</label><select id="posPaymentMode" class="mvi-pos-input" onchange="posPaymentModeChanged()"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option><option>Credit</option></select></div>
         <div><label>Amount Received</label><input id="posAmountReceived" class="mvi-pos-input" type="number" min="0" step="0.01" value="0" oninput="posCalculateReturn()"></div>
+        <div id="posBankWrap" style="display:none"><label>Bank Account</label><select id="posBankAccount" class="mvi-pos-input"><option value="">Select Bank Account</option></select></div>
+        <div><label>Reference No.</label><input id="posReference" class="mvi-pos-input" placeholder="Optional reference"></div>
+        <div id="posDueDateWrap" style="display:none"><label>Due Date</label><input id="posDueDate" class="mvi-pos-input" type="date"></div>
       </div>
-      <div class="mvi-pos-return"><span>Change to Return:</span><strong id="posChange">₹ 0.00</strong></div>
+      <div class="mvi-pos-return"><span id="posBalanceLabel">Change to Return:</span><strong id="posChange">₹ 0.00</strong></div>
       <div class="mvi-pos-actions">
-        <button class="mvi-pos-action mvi-pos-save" onclick="savePOSBill()">Save &amp; Print Bill [Ctrl+P]</button>
-        <button class="mvi-pos-action" onclick="posSetCreditPayment()">Other/Credit Payments [Ctrl+M]</button>
+        <button class="mvi-pos-action mvi-pos-save" onclick="savePOSBill()" title="Save once; repeated clicks are ignored while saving.">Save &amp; Print Bill [Ctrl+P]</button>
+        <button class="mvi-pos-action" onclick="posSetCreditPayment()">Credit Payment [Ctrl+M]</button>
       </div>
     </section>
   </div></div>`;
@@ -5315,20 +5321,38 @@ function renderPOSItemSuggestions(){
 }
 
 function posAddFirstSuggestion(){
+  const input=document.getElementById('posItemSearch');
+  const q=String(input?.value||'').trim().toLowerCase();
+  if(q){
+    const exact=posGetItems().find(i=>String(i.code||i.itemCode||'').trim().toLowerCase()===q);
+    if(exact){posAddItem(exact.id);return;}
+  }
   const first=document.querySelector('#posItemSuggestions button');if(first)first.click();
+}
+
+function posQuickItemEntry(){
+  const input=document.getElementById('posItemSearch');
+  if(!input)return;
+  input.focus();
+  input.select();
 }
 
 function posAddItem(itemId){
   const item=posGetItems().find(i=>String(i.id)===String(itemId));if(!item)return;
+  const available=posFindStock(itemId);
+  if(available<=0){alert(`No stock available for ${item.name||'this item'}.`);return;}
   const body=document.getElementById('posItemsBody');if(!body)return;
   const existing=body.querySelector(`tr[data-pos-row][data-item-id="${CSS.escape(String(itemId))}"]`);
   if(existing){
-    const q=existing.querySelector('.pos-row-qty');q.value=Number(q.value||0)+1;posRecalcRow(existing);
+    const q=existing.querySelector('.pos-row-qty');
+    const next=(Number(q.value)||0)+1;
+    if(next>available){alert(`Only ${available} ${item.unit||''} available for ${item.name||'this item'}.`);q.focus();return;}
+    q.value=next;posRecalcRow(existing);
   }else{
     if(body.querySelector('.mvi-pos-empty'))body.innerHTML='';
-    const tr=document.createElement('tr');tr.dataset.posRow='1';tr.dataset.itemId=item.id;
-    const price=Number(item.salePrice??item.sellingPrice??item.price??item.rate??0)||0;
-    tr.innerHTML=`<td class="pos-row-no"></td><td>${escapeHtml(item.code||item.itemCode||'')}</td><td><b>${escapeHtml(item.name||'')}</b></td><td><input class="mvi-pos-input mvi-pos-qty pos-row-qty" type="number" min="0.01" step="0.01" value="1" oninput="posRecalcRow(this.closest('tr'))"></td><td>${escapeHtml(item.unit||'')}</td><td><input class="mvi-pos-input pos-row-rate" type="number" min="0" step="0.01" value="${price}" oninput="posRecalcRow(this.closest('tr'))"></td><td><input class="mvi-pos-input pos-row-disc" type="number" min="0" max="100" step="0.01" value="0" oninput="posRecalcRow(this.closest('tr'))"></td><td class="pos-row-amount">₹ 0.00</td><td><button class="mvi-pos-remove" onclick="posRemoveRow(this.closest('tr'))">✕</button></td>`;
+    const tr=document.createElement('tr');tr.dataset.posRow='1';tr.dataset.itemId=item.id;tr.dataset.availableStock=String(available);
+    const price=Number(item.sale)||0;
+    tr.innerHTML=`<td class="pos-row-no"></td><td>${escapeHtml(item.code||item.itemCode||'')}</td><td><b>${escapeHtml(item.name||'')}</b><div style="font-size:11px;color:#16a34a;margin-top:3px">Available: ${available} ${escapeHtml(item.unit||'')}</div></td><td><input class="mvi-pos-input mvi-pos-qty pos-row-qty" type="number" min="0.01" max="${available}" step="0.01" value="1" oninput="posRecalcRow(this.closest('tr'))"></td><td>${escapeHtml(item.unit||'')}</td><td><input class="mvi-pos-input pos-row-rate" type="number" min="0" step="0.01" value="${price}" oninput="posRecalcRow(this.closest('tr'))"></td><td><input class="mvi-pos-input pos-row-disc" type="number" min="0" max="100" step="0.01" value="0" oninput="posRecalcRow(this.closest('tr'))"></td><td class="pos-row-amount">₹ 0.00</td><td><button class="mvi-pos-remove" onclick="posRemoveRow(this.closest('tr'))">✕</button></td>`;
     body.appendChild(tr);posRecalcRow(tr);
   }
   document.getElementById('posItemSearch').value='';document.getElementById('posItemSuggestions').style.display='none';document.getElementById('posItemSearch').focus();
@@ -5337,7 +5361,13 @@ function posAddItem(itemId){
 
 function posRecalcRow(tr){
   if(!tr)return;
-  const q=Number(tr.querySelector('.pos-row-qty')?.value)||0,r=Number(tr.querySelector('.pos-row-rate')?.value)||0,d=Number(tr.querySelector('.pos-row-disc')?.value)||0;
+  const qtyEl=tr.querySelector('.pos-row-qty');
+  let q=Number(qtyEl?.value)||0;
+  const available=Number(tr.dataset.availableStock)||posFindStock(tr.dataset.itemId);
+  if(q<0){q=0;if(qtyEl)qtyEl.value='0';}
+  if(q>available){q=available;if(qtyEl)qtyEl.value=String(available);}
+  const r=Number(tr.querySelector('.pos-row-rate')?.value)||0,d=Math.min(100,Math.max(0,Number(tr.querySelector('.pos-row-disc')?.value)||0));
+  const discEl=tr.querySelector('.pos-row-disc');if(discEl&&Number(discEl.value)!==d)discEl.value=String(d);
   const amount=q*r*(1-d/100);const el=tr.querySelector('.pos-row-amount');if(el)el.textContent='₹ '+amount.toFixed(2);
   posRefreshNumbers();
 }
@@ -5371,7 +5401,23 @@ function posRemoveSelected(){
 function posFocusQty(){const r=posGetRows();if(r.length)r[r.length-1].querySelector('.pos-row-qty')?.focus();}
 function posFocusDiscount(){const r=posGetRows();if(r.length)r[r.length-1].querySelector('.pos-row-disc')?.focus();}
 function posFocusCustomer(){document.getElementById('posCustomer')?.focus();}
-function posSetCreditPayment(){const e=document.getElementById('posPaymentMode');if(e)e.value='Credit';posCalculateReturn();posFocusCustomer();}
+function posLoadBankAccounts(selectedId=''){
+  const el=document.getElementById('posBankAccount');if(!el)return;
+  let opts='';
+  try{opts=mviappsBankAccountOptions(selectedId);}catch(e){opts='';}
+  el.innerHTML='<option value="">Select Bank Account</option>'+(opts||'<option value="" disabled>No bank account added</option>');
+}
+function posPaymentModeChanged(){
+  const mode=document.getElementById('posPaymentMode')?.value||'Cash';
+  const bank=document.getElementById('posBankWrap'),due=document.getElementById('posDueDateWrap');
+  if(bank)bank.style.display=mode==='Bank'?'':'none';
+  if(due)due.style.display=mode==='Credit'?'':'none';
+  const received=document.getElementById('posAmountReceived');
+  if(received && mode==='Credit')received.value='0';
+  if(mode==='Bank')posLoadBankAccounts(document.getElementById('posBankAccount')?.value||'');
+  posCalculateReturn();
+}
+function posSetCreditPayment(){const e=document.getElementById('posPaymentMode');if(e){e.value='Credit';posPaymentModeChanged();}posFocusCustomer();}
 
 function posOpenDatePicker(){
   const e=document.getElementById('posDate');if(!e)return;
@@ -5379,11 +5425,179 @@ function posOpenDatePicker(){
 }
 function posSyncDateDisplay(){const p=document.getElementById('posDate'),d=document.getElementById('posDateDisplay');if(p&&d)d.value=p.value?p.value.split('-').reverse().join('/'):'';}
 
-function clearPOSBill(){
+function posBillHistory(){
+  posCloseBillHistoryBox();
+  let invoices=[];
+  try{invoices=JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]');}catch(e){invoices=[];}
+  const posInvoices=invoices.filter(x=>String(x.notes||'').toUpperCase()==='POS SALE').slice().sort((a,b)=>Number(b.id||0)-Number(a.id||0));
+  const overlay=document.createElement('div');
+  overlay.id='mviPosHistoryOverlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10021;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+  overlay.innerHTML=`<div style="background:#fff;width:min(900px,96vw);max-height:86vh;overflow:hidden;border-radius:10px;box-shadow:0 18px 50px rgba(15,23,42,.25);padding:16px;display:flex;flex-direction:column;box-sizing:border-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+      <div><h2 style="margin:0">POS Bill History</h2><div style="font-size:12px;color:#64748b">View saved POS bills and reprint a receipt.</div></div>
+      <button class="btn" onclick="posCloseBillHistoryBox()">✕ Close</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 180px;gap:8px;margin-bottom:10px">
+      <input id="posHistorySearch" class="mvi-pos-input" placeholder="Search bill no. or customer..." oninput="posRenderBillHistory()">
+      <input id="posHistoryDate" class="mvi-pos-input" type="date" onchange="posRenderBillHistory()">
+    </div>
+    <div id="posHistoryList" style="overflow:auto;border-top:1px solid #e5e7eb"></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  window._mviPOSHistoryInvoices=posInvoices;
+  posRenderBillHistory();
+}
+function posCloseBillHistoryBox(){document.getElementById('mviPosHistoryOverlay')?.remove();window._mviPOSHistoryInvoices=null;}
+function posRenderBillHistory(){
+  const box=document.getElementById('posHistoryList');if(!box)return;
+  const all=Array.isArray(window._mviPOSHistoryInvoices)?window._mviPOSHistoryInvoices:[];
+  const q=(document.getElementById('posHistorySearch')?.value||'').trim().toLowerCase();
+  const date=document.getElementById('posHistoryDate')?.value||'';
+  const list=all.filter(b=>{
+    const hay=`${b.invoiceNo||''} ${b.customerName||''}`.toLowerCase();
+    return (!q||hay.includes(q))&&(!date||String(b.date||'')===date);
+  });
+  if(!list.length){box.innerHTML='<div style="padding:24px;text-align:center;color:#64748b">No POS bills found.</div>';return;}
+  box.innerHTML=list.slice(0,100).map(b=>{
+    const itemCount=Array.isArray(b.items)?b.items.length:0;
+    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 4px;border-bottom:1px solid #e5e7eb">
+      <div><b>${escapeHtml(b.invoiceNo||'POS Bill')}</b><div style="font-size:12px;color:#64748b">${escapeHtml((b.date||'').split('-').reverse().join('/'))} · ${escapeHtml(b.customerName||'Walk-in / Cash Customer')} · ${itemCount} item(s) · ${escapeHtml(b.paymentMode||'Cash')}</div></div>
+      <div style="display:flex;align-items:center;gap:10px"><b>₹ ${Number(b.total||0).toFixed(2)}</b><button class="btn" onclick="posEditHistoryBill('${escapeAttr(b.id)}')">Edit</button><button class="btn" onclick="posReprintHistoryBill('${escapeAttr(b.id)}')">Reprint</button></div>
+    </div>`;
+  }).join('');
+}
+function posEditHistoryBill(id){
+  const all=Array.isArray(window._mviPOSHistoryInvoices)?window._mviPOSHistoryInvoices:[];
+  const b=all.find(x=>String(x.id)===String(id));
+  if(!b){alert('Bill not found.');return;}
+  if(!ensureEntryDateInActiveFY(b.date,'Bill Date'))return;
+  if(!Array.isArray(b.items)||!b.items.length){alert('This bill has no items to edit.');return;}
+  const items=posGetItems();
+  for(const it of b.items){
+    if(!items.find(x=>String(x.id)===String(it.itemId))){alert('An item in this bill no longer exists. The bill was not opened for editing.');return;}
+  }
+  posCloseBillHistoryBox();clearPOSBill();
+  window._mviPOSEditingId=String(b.id);
+  const d=document.getElementById('posDate'),dd=document.getElementById('posDateDisplay');
+  if(d)d.value=b.date||'';if(dd)dd.value=b.date?b.date.split('-').reverse().join('/'):'';
+  posLoadCustomers();
+  const c=document.getElementById('posCustomer');if(c)c.value=b.customer||'';
+  posLoadBankAccounts(b.bankAccount||'');
+  const p=document.getElementById('posPaymentMode');if(p){p.value=b.paymentMode||'Cash';posPaymentModeChanged();}
+  const ba=document.getElementById('posBankAccount');if(ba)ba.value=b.bankAccount||'';
+  const ref=document.getElementById('posReference');if(ref)ref.value=b.reference||'';
+  const due=document.getElementById('posDueDate');if(due)due.value=b.dueDate||'';
+  const received=document.getElementById('posAmountReceived');if(received)received.value=b.paymentMode==='Credit'?'0':String(b.amountReceived||0);
+  for(const it of b.items){
+    posAddItem(it.itemId);
+    const tr=posGetRows().find(r=>String(r.dataset.itemId)===String(it.itemId));
+    if(tr){tr.querySelector('.pos-row-qty').value=String(it.qty);tr.querySelector('.pos-row-rate').value=String(it.rate);tr.querySelector('.pos-row-disc').value=String(it.discount||0);posRecalcRow(tr);}
+  }
+  posRefreshNumbers();
+  const btn=document.querySelector('.mvi-pos-save');if(btn)btn.innerHTML='Update & Print Bill';
+  document.getElementById('posItemSearch')?.focus();
+}
+
+function posReprintHistoryBill(id){
+  const all=Array.isArray(window._mviPOSHistoryInvoices)?window._mviPOSHistoryInvoices:[];
+  const record=all.find(x=>String(x.id)===String(id));
+  if(!record){alert('Bill not found.');return;}
+  posPrintBill(record);
+}
+
+function posGetHeldBills(){
+  try{return JSON.parse(localStorage.getItem('mviapps_pos_held_bills')||'[]');}catch(e){return [];}
+}
+function posSaveHeldBills(list){localStorage.setItem('mviapps_pos_held_bills',JSON.stringify(list));}
+function posHoldBill(){
+  const rows=posGetRows();
+  if(!rows.length){alert('Please add at least one item before holding the bill.');return;}
+  const date=document.getElementById('posDate')?.value||'';
+  if(!ensureEntryDateInActiveFY(date,'Date'))return;
+  const customerId=document.getElementById('posCustomer')?.value||'';
+  const customerEl=document.getElementById('posCustomer');
+  const customerName=customerEl?.selectedOptions?.[0]?.textContent||'Walk-in / Cash Customer';
+  const items=rows.map(tr=>({
+    itemId:tr.dataset.itemId||'',
+    qty:Number(tr.querySelector('.pos-row-qty')?.value)||0,
+    rate:Number(tr.querySelector('.pos-row-rate')?.value)||0,
+    discount:Number(tr.querySelector('.pos-row-disc')?.value)||0
+  }));
+  if(items.some(x=>x.qty<=0)){alert('Please enter a valid quantity for every item.');return;}
+  const record={
+    id:Date.now(),createdAt:new Date().toISOString(),date,customerId,customerName,
+    paymentMode:document.getElementById('posPaymentMode')?.value||'Cash',
+    amountReceived:Number(document.getElementById('posAmountReceived')?.value)||0,
+    bankAccount:document.getElementById('posBankAccount')?.value||'',
+    reference:(document.getElementById('posReference')?.value||'').trim(),
+    dueDate:document.getElementById('posDueDate')?.value||'',items,
+    total:posGetTotal()
+  };
+  const held=posGetHeldBills();held.unshift(record);posSaveHeldBills(held.slice(0,50));
+  alert('Bill held successfully. You can recall it later.');
+  clearPOSBill();
+}
+function posCloseRecallBox(){document.getElementById('mviPosRecallOverlay')?.remove();}
+function posDeleteHeldBill(id){
+  if(!confirm('Delete this held bill?'))return;
+  posSaveHeldBills(posGetHeldBills().filter(x=>String(x.id)!==String(id)));
+  posRecallBill();
+}
+function posRecallBill(){
+  const held=posGetHeldBills();
+  if(!held.length){alert('No held bills found.');return;}
+  posCloseRecallBox();
+  const rows=held.map((b,i)=>`<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #e5e7eb"><div><b>${escapeHtml(b.customerName||'Walk-in / Cash Customer')}</b><div style="font-size:12px;color:#64748b">${escapeHtml((b.date||'').split('-').reverse().join('/'))} · ${b.items?.length||0} item(s) · ₹ ${Number(b.total||0).toFixed(2)} · ${escapeHtml(b.paymentMode||'Cash')}</div></div><button class="btn" onclick="posRecallHeldBill('${escapeAttr(b.id)}')">Recall</button><button class="btn" onclick="posDeleteHeldBill('${escapeAttr(b.id)}')">Delete</button></div>`).join('');
+  const ov=document.createElement('div');ov.id='mviPosRecallOverlay';ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10020;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+  ov.innerHTML=`<div style="background:#fff;width:min(760px,96vw);max-height:82vh;overflow:auto;border-radius:10px;box-shadow:0 18px 50px rgba(15,23,42,.25);padding:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div><h2 style="margin:0">Held Bills</h2><div style="font-size:12px;color:#64748b">Select a bill to continue billing.</div></div><button class="btn" onclick="posCloseRecallBox()">✕ Close</button></div>${rows}</div>`;
+  document.body.appendChild(ov);
+}
+function posRecallHeldBill(id){
+  const held=posGetHeldBills(),b=held.find(x=>String(x.id)===String(id));
+  if(!b)return;
+  if(!ensureEntryDateInActiveFY(b.date,'Bill Date'))return;
+  const items=posGetItems();
+  for(const it of (b.items||[])){
+    const item=items.find(x=>String(x.id)===String(it.itemId));
+    const available=posFindStock(it.itemId);
+    if(!item){alert('An item in this held bill no longer exists. The held bill was not recalled.');return;}
+    if(Number(it.qty)>available){alert(`Insufficient stock for ${item.name||'an item'} while recalling this bill. Available quantity is ${available} ${item.unit||''}.`);return;}
+  }
+  posCloseRecallBox();clearPOSBill();
+  const d=document.getElementById('posDate'),dd=document.getElementById('posDateDisplay');
+  if(d)d.value=b.date||'';if(dd)dd.value=b.date?b.date.split('-').reverse().join('/'):'';
+  posLoadCustomers();
+  const c=document.getElementById('posCustomer');if(c)c.value=b.customerId||'';
+  posLoadBankAccounts(b.bankAccount||'');
+  const p=document.getElementById('posPaymentMode');if(p){p.value=b.paymentMode||'Cash';posPaymentModeChanged();}
+  const ba=document.getElementById('posBankAccount');if(ba)ba.value=b.bankAccount||'';
+  const ref=document.getElementById('posReference');if(ref)ref.value=b.reference||'';
+  const due=document.getElementById('posDueDate');if(due)due.value=b.dueDate||'';
+  const received=document.getElementById('posAmountReceived');if(received)received.value=b.paymentMode==='Credit'?'0':String(b.amountReceived||0);
+  for(const it of (b.items||[])){
+    posAddItem(it.itemId);
+    const tr=posGetRows().find(r=>String(r.dataset.itemId)===String(it.itemId));
+    if(tr){tr.querySelector('.pos-row-qty').value=String(it.qty);tr.querySelector('.pos-row-rate').value=String(it.rate);tr.querySelector('.pos-row-disc').value=String(it.discount||0);posRecalcRow(tr);}
+  }
+  posRefreshNumbers();
+  document.getElementById('posItemSearch')?.focus();
+  posSaveHeldBills(held.filter(x=>String(x.id)!==String(id)));
+  alert('Held bill recalled successfully.');
+}
+
+function clearPOSBill(silent=false){
+  if(!silent && posGetRows().length){
+    if(!confirm('Current POS bill will be cleared. Continue?'))return;
+  }
+  window._mviPOSEditingId=null;
+  const saveBtn=document.querySelector('.mvi-pos-save');if(saveBtn)saveBtn.innerHTML='Save &amp; Print Bill [Ctrl+P]';
   const s=document.getElementById('posItemSearch');if(s)s.value='';
   const b=document.getElementById('posItemsBody');if(b)b.innerHTML='<tr><td colspan="9" class="mvi-pos-empty">Search and select an item to add it to the bill.</td></tr>';
   const a=document.getElementById('posAmountReceived');if(a)a.value='0';
-  const p=document.getElementById('posPaymentMode');if(p)p.value='Cash';
+  const p=document.getElementById('posPaymentMode');if(p){p.value='Cash';posPaymentModeChanged();}
+  const ref=document.getElementById('posReference');if(ref)ref.value='';
+  const due=document.getElementById('posDueDate');if(due)due.value='';
   const d=document.getElementById('posDate'),dd=document.getElementById('posDateDisplay');const today=new Date().toISOString().slice(0,10);if(d)d.value=today;if(dd)dd.value=today.split('-').reverse().join('/');
   posRefreshNumbers();
   posLoadCustomers();
@@ -5394,20 +5608,32 @@ function posPrintBill(record){
   const party=record.customerName||'Walk-in / Cash Customer';
   const win=window.open('','_blank');if(!win){alert('Please allow pop-ups to print the POS bill.');return;}
   const rows=record.items.map((it,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(it.itemName||'')}</td><td>${it.qty}</td><td>₹ ${Number(it.rate).toFixed(2)}</td><td>₹ ${Number(it.amount).toFixed(2)}</td></tr>`).join('');
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(record.invoiceNo)}</title><style>@page{size:80mm auto;margin:4mm}body{font-family:Arial,sans-serif;font-size:11px;margin:0;color:#111}.c{text-align:center}.line{border-top:1px dashed #555;margin:7px 0}table{width:100%;border-collapse:collapse}td,th{padding:4px 1px;text-align:left}th:nth-child(n+3),td:nth-child(n+3){text-align:right}.total{font-size:15px;font-weight:800;text-align:right}</style></head><body><div class="c"><b>MVIApps</b><br>POS BILL</div><div class="line"></div><div>Bill: ${escapeHtml(record.invoiceNo)}<br>Date: ${escapeHtml(record.date.split('-').reverse().join('/'))}<br>Customer: ${escapeHtml(party)}</div><div class="line"></div><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead><tbody>${rows}</tbody></table><div class="line"></div><div class="total">Total: ₹ ${Number(record.total).toFixed(2)}</div><div>Payment: ${escapeHtml(record.paymentMode)}</div></body></html>`);
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(record.invoiceNo)}</title><style>@page{size:80mm auto;margin:4mm}body{font-family:Arial,sans-serif;font-size:11px;margin:0;color:#111}.c{text-align:center}.line{border-top:1px dashed #555;margin:7px 0}table{width:100%;border-collapse:collapse}td,th{padding:4px 1px;text-align:left}th:nth-child(n+3),td:nth-child(n+3){text-align:right}.total{font-size:15px;font-weight:800;text-align:right}</style></head><body><div class="c"><b>MVIApps</b><br>POS BILL</div><div class="line"></div><div>Bill: ${escapeHtml(record.invoiceNo)}<br>Date: ${escapeHtml(record.date.split('-').reverse().join('/'))}<br>Customer: ${escapeHtml(party)}</div><div class="line"></div><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Rate</th><th>Amt</th></tr></thead><tbody>${rows}</tbody></table><div class="line"></div><div class="total">Total: ₹ ${Number(record.total).toFixed(2)}</div><div>Payment: ${escapeHtml(record.paymentMode)}</div>${record.bankAccount?`<div>Bank: ${escapeHtml((document.getElementById('posBankAccount')?.selectedOptions?.[0]?.textContent)||record.bankAccount)}</div>`:''}${record.reference?`<div>Reference: ${escapeHtml(record.reference)}</div>`:''}${record.paymentMode==='Credit'?`<div>Due: ₹ ${Number(record.total).toFixed(2)}${record.dueDate?` · Due Date: ${escapeHtml(record.dueDate.split('-').reverse().join('/'))}`:''}</div>`:`<div>Received: ₹ ${Number(record.amountReceived||0).toFixed(2)} · Change: ₹ ${Number(record.changeAmount||0).toFixed(2)}</div>`}</body></html>`);
   win.document.close();win.focus();setTimeout(()=>{win.print();setTimeout(()=>win.close(),500)},300);
 }
 
 function savePOSBill(){
-  if(!ensureEntryDateInActiveFY(document.getElementById('posDate')?.value,'Date'))return;
-  const rows=posGetRows();if(!rows.length){alert('Please add at least one item.');return;}
+  if(window._mviPOSSaving){posSaveUnlock();return;}
+  window._mviPOSSaving=true;
+  const saveBtn=document.querySelector('.mvi-pos-save');
+  const originalSaveText=saveBtn?.textContent||'Save & Print Bill [Ctrl+P]';
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving...';}
+  const posSaveUnlock=()=>{window._mviPOSSaving=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent=originalSaveText;}};
+  if(!ensureEntryDateInActiveFY(document.getElementById('posDate')?.value,'Date')){posSaveUnlock();return;}
+  const rows=posGetRows();if(!rows.length){alert('Please add at least one item.');posSaveUnlock();return;}
   const customerId=document.getElementById('posCustomer')?.value||'';
   const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
   const party=parties.find(p=>String(p.id)===String(customerId));
   const paymentMode=document.getElementById('posPaymentMode')?.value||'Cash';
   const total=posGetTotal(),received=Number(document.getElementById('posAmountReceived')?.value)||0;
-  if(paymentMode==='Credit'&&!customerId){alert('Please select a customer for Credit payment.');return;}
-  if(paymentMode!=='Credit'&&received<total){alert('Amount Received is less than the bill total.');return;}
+  const bankAccount=document.getElementById('posBankAccount')?.value||'';
+  const reference=document.getElementById('posReference')?.value.trim()||'';
+  const dueDate=document.getElementById('posDueDate')?.value||'';
+  if(paymentMode==='Credit'&&!customerId){alert('Please select a customer for Credit payment.');posSaveUnlock();return;}
+  if(paymentMode==='Bank'&&!bankAccount){alert('Please select a Bank Account.');posSaveUnlock();return;}
+  if(paymentMode==='Credit'&&dueDate&&!ensureEntryDateInActiveFY(dueDate,'Due Date')){posSaveUnlock();return;}
+  if(paymentMode==='Credit'&&dueDate && dueDate < (document.getElementById('posDate')?.value||'')){alert('Due Date cannot be earlier than the bill date.');posSaveUnlock();return;}
+  if(paymentMode!=='Credit'&&received<total){alert('Amount Received is less than the bill total.');posSaveUnlock();return;}
 
   const items=posGetItems(),invoices=JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]');
   const invoiceNo=typeof getNextAutoNumber==='function'?getNextAutoNumber('mviapps_sales_invoices','POS'):('POS-'+String(invoices.length+1).padStart(4,'0'));
@@ -5417,41 +5643,80 @@ function savePOSBill(){
     return {itemId:item?.id||tr.dataset.itemId,itemName:item?.name||'',godownId:'',qty:q,rate:r,discount:d,gst:0,amount:q*r*(1-d/100)};
   });
 
-  // POS consumes stock from the same stock pool used by the existing Sale module.
+  // POS consumes stock safely from the same Godown-wise stock pool used by the Sale module.
   const gs=getGodowns(),stock=getGodownStock();
+  const editingId=window._mviPOSEditingId?String(window._mviPOSEditingId):'';
+  let existing=editingId?invoices.find(x=>String(x.id)===editingId):null;
+  if(existing){
+    // Restore the old bill's stock before validating and allocating the edited bill.
+    (existing.items||[]).forEach(oldIt=>{
+      const allocations=Array.isArray(oldIt.stockAllocations)&&oldIt.stockAllocations.length?oldIt.stockAllocations:[{godownId:oldIt.godownId||'',qty:Number(oldIt.qty)||0}];
+      allocations.forEach(a=>{
+        let rec=stock.find(v=>String(v.itemId)===String(oldIt.itemId)&&String(v.godownId)===String(a.godownId||''));
+        if(!rec){rec={id:Date.now()+Math.random(),itemId:oldIt.itemId,godownId:a.godownId||'',qty:0};stock.push(rec);}
+        rec.qty=(Number(rec.qty)||0)+(Number(a.qty)||0);
+      });
+    });
+  }
+  const posStockAllocations=[];
   for(const it of saleItems){
     const item=items.find(i=>String(i.id)===String(it.itemId));
     const available=posFindStock(it.itemId);
-    if(it.qty>available){alert(`Insufficient stock for ${item?.name||'item'}. Available quantity is ${available} ${item?.unit||''}.`);return;}
-    const godown=gs.find(g=>Number(stock.find(s=>String(s.itemId)===String(it.itemId)&&String(s.godownId)===String(g.id))?.qty||0)>=it.qty) || gs.find(g=>Number(stock.find(s=>String(s.itemId)===String(it.itemId)&&String(s.godownId)===String(g.id))?.qty||0)>0);
-    if(godown){it.godownId=godown.id;const rec=stock.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(godown.id));if(rec)rec.qty=(Number(rec.qty)||0)-it.qty;}
+    if(it.qty<=0){alert(`Please enter a valid quantity for ${item?.name||'item'}.`);posSaveUnlock();return;}
+    if(it.qty>available){alert(`Insufficient stock for ${item?.name||'item'}. Available quantity is ${available} ${item?.unit||''}.`);posSaveUnlock();return;}
+    let remaining=it.qty;
+    const candidates=stock.filter(s=>String(s.itemId)===String(it.itemId)&&(Number(s.qty)||0)>0).sort((a,b)=>(Number(b.qty)||0)-(Number(a.qty)||0));
+    const allocations=[];
+    for(const rec of candidates){
+      if(remaining<=0)break;
+      const take=Math.min(remaining,Number(rec.qty)||0);
+      if(take<=0)continue;
+      rec.qty=(Number(rec.qty)||0)-take;
+      allocations.push({godownId:rec.godownId||'',qty:take});
+      remaining-=take;
+    }
+    if(remaining>0.000001){alert(`Stock allocation failed for ${item?.name||'item'}. Please check Godown stock.`);posSaveUnlock();return;}
+    it.godownId=allocations[0]?.godownId||'';
+    it.stockAllocations=allocations;
+    posStockAllocations.push({itemId:it.itemId,allocations});
   }
   saveGodownStock(stock);
 
   const date=document.getElementById('posDate')?.value||new Date().toISOString().slice(0,10);
-  const record={id:Date.now(),customer:customerId,customerName:party?.name||'Walk-in / Cash Customer',date,invoiceNo,paymentMode,bankAccount:'',reference:'',dueDate:'',notes:'POS Sale',items:saleItems,total};
-  invoices.push(record);localStorage.setItem('mviapps_sales_invoices',JSON.stringify(invoices));
+  const record={id:existing?existing.id:Date.now(),customer:customerId,customerName:party?.name||'Walk-in / Cash Customer',date,invoiceNo:existing?.invoiceNo||invoiceNo,paymentMode,bankAccount,reference,dueDate,amountReceived:paymentMode==='Credit'?0:received,changeAmount:paymentMode==='Credit'?0:Math.max(0,received-total),notes:'POS Sale',items:saleItems,total};
+  if(existing){const at=invoices.findIndex(x=>String(x.id)===editingId);if(at>=0)invoices[at]=record;}else invoices.push(record);
+  localStorage.setItem('mviapps_sales_invoices',JSON.stringify(invoices));
 
   let moves=JSON.parse(localStorage.getItem('mviapps_stock_movements')||'[]');
-  saleItems.forEach(it=>moves.push({id:Date.now()+Math.random(),date,itemId:it.itemId,qty:it.qty,type:'sale',ref:invoiceNo,godownId:it.godownId||''}));
+  if(existing)moves=moves.filter(m=>!(m.type==='sale'&&String(m.ref)===String(existing.invoiceNo)));
+  saleItems.forEach(it=>{
+    const allocations=Array.isArray(it.stockAllocations)&&it.stockAllocations.length?it.stockAllocations:[{godownId:it.godownId||'',qty:it.qty}];
+    allocations.forEach(a=>moves.push({id:Date.now()+Math.random(),date,itemId:it.itemId,qty:a.qty,type:'sale',ref:invoiceNo,godownId:a.godownId||''}));
+  });
   localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves));
 
-  alert('POS bill saved successfully.');
+  alert(existing?'POS bill updated successfully.':'POS bill saved successfully.');
   posPrintBill(record);
   clearPOSBill();
+  posSaveUnlock();
 }
 
 function initPointOfSale(){
-  posLoadCustomers();posRefreshNumbers();
+  posLoadCustomers();posLoadBankAccounts();posPaymentModeChanged();posRefreshNumbers();
   document.getElementById('posItemSearch')?.focus();
   document.removeEventListener('keydown',mviPOSKeyHandler);
   document.addEventListener('keydown',mviPOSKeyHandler);
 }
 function mviPOSKeyHandler(e){
   if(!document.getElementById('posItemSearch'))return;
-  if(e.ctrlKey&&e.key.toLowerCase()==='t'){e.preventDefault();clearPOSBill();}
+  if(e.ctrlKey&&e.key.toLowerCase()==='t'){e.preventDefault();clearPOSBill(false);}
+  if(e.ctrlKey&&e.key.toLowerCase()==='h'){e.preventDefault();posHoldBill();}
+  if(e.ctrlKey&&e.key.toLowerCase()==='b'){e.preventDefault();posBillHistory();}
+  if(e.ctrlKey&&e.key.toLowerCase()==='r'){e.preventDefault();posRecallBill();}
   if(e.ctrlKey&&e.key.toLowerCase()==='p'){e.preventDefault();savePOSBill();}
   if(e.ctrlKey&&e.key.toLowerCase()==='m'){e.preventDefault();posSetCreditPayment();}
+  if(e.key==='F5'){e.preventDefault();posQuickItemEntry();}
+  if(e.key==='F5'){e.preventDefault();posQuickItemEntry();}
   if(e.key==='F2'){e.preventDefault();posFocusQty();}
   if(e.key==='F3'){e.preventDefault();posFocusDiscount();}
   if(e.key==='F4'){e.preventDefault();posRemoveSelected();}
