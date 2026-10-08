@@ -3735,27 +3735,32 @@ function printBankStatement(){
 function posReportPage(){
   return `
   <div class="mvi-pos-report">
-    <div class="card">
-      <div class="pr-head">
-        <div class="pr-title">
-          <div class="pr-icon">▣</div>
-          <div><div class="pr-kicker">Reports</div><div class="pr-main-title">POS Sales Report</div><div class="muted pr-subtitle">View POS bills and payment-mode totals for the selected period.</div></div>
-        </div>
-        <button class="btn" onclick="mviappsPrintPOSReport()" style="white-space:nowrap">Print / Save PDF</button>
+    <div class="pr-page-head">
+      <div class="pr-title">
+        <div class="pr-icon">▣</div>
+        <div><div class="pr-kicker">Reports</div><div class="pr-main-title">POS Sales Report</div><div class="muted pr-subtitle">Analyse POS billing, collections and payment-mode performance.</div></div>
       </div>
+      <button class="btn print-pdf-btn pr-print-btn" onclick="mviappsPrintPOSReport()">Print / Save PDF</button>
+    </div>
+
+    <div class="pr-filter-card">
+      <div class="pr-section-title"><span>Report Filters</span><small>Select period and optional filters</small></div>
       <div class="pr-filters">
         <div class="pr-field"><label>From Date</label><div class="pl-date-wrap"><input id="posReportFromDisplay" class="input" type="text" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('posReport','from')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('posReport','from')"><button type="button" class="pl-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openReportDatePicker('posReport','from')">&#128197;</button><input id="posReportFrom" type="date" aria-label="Select From Date" onchange="syncReportDateDisplay('posReport','from')"></div></div>
-        <div class="pr-field"><label>To Date</label><div class="pl-date-wrap"><input id="posReportToDisplay" class="input" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('posReport','to')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('posReport','to')"><button type="button" class="pl-calendar-btn" aria-label="Open To Date calendar" title="Select To Date" onclick="openReportDatePicker('posReport','to')">&#128197;</button><input id="posReportTo" type="date" aria-label="Select To Date" onchange="syncReportDateDisplay('posReport','to')"></div></div>
+        <div class="pr-field"><label>To Date</label><div class="pl-date-wrap"><input id="posReportToDisplay" class="input" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('posReport','to')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('posReport','to')"><button type="button" class="pl-calendar-btn" aria-label="Open To Date calendar" title="Select date" onclick="openReportDatePicker('posReport','to')">&#128197;</button><input id="posReportTo" type="date" aria-label="Select To Date" onchange="syncReportDateDisplay('posReport','to')"></div></div>
         <div class="pr-field"><label>Payment Mode</label><select id="posReportMode"><option value="">All Payment Modes</option><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option><option>Credit</option></select></div>
-        <div class="pr-field"><label>Search</label><input id="posReportSearch" class="input" type="text" placeholder="Search invoice no. or customer"></div>
-        <div class="pr-actions"><button class="btn" onclick="mviappsRunPOSReport()">View Report</button></div>
+        <div class="pr-field pr-search-field"><label>Search</label><input id="posReportSearch" class="input" type="text" placeholder="Invoice no. or customer"></div>
+        <div class="pr-actions"><button class="btn" onclick="mviappsRunPOSReport()">View Report</button><button class="btn secondary" onclick="initPOSReport()">Reset</button></div>
       </div>
     </div>
-    <div class="card" id="posReportCard">
-      <div class="pr-report-head"><div><div class="pr-report-title">POS Transactions</div><div class="muted pr-period" id="posReportPeriod"></div></div><div class="pr-total" id="posReportTotal"></div></div>
+
+    <div class="pr-result-card" id="posReportCard">
+      <div class="pr-report-head"><div><div class="pr-report-title">POS Sales Summary</div><div class="muted pr-period" id="posReportPeriod"></div></div><div class="pr-total" id="posReportTotal"></div></div>
       <div class="pr-summary" id="posReportSummary"></div>
+      <div class="pr-subsection-head"><span>Payment Mode Summary</span><small>Total POS bill value by payment mode</small></div>
       <div class="pr-payment-summary" id="posReportPaymentSummary"></div>
-      <div class="pr-table-wrap" style="margin-top:16px"><table class="data-table" id="posReportTable"><thead><tr><th>Date</th><th>Invoice No.</th><th>Customer</th><th>Payment Mode</th><th class="num">Bill Amount</th><th class="num">Amount Received</th><th class="num">Change</th></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+      <div class="pr-subsection-head pr-trans-head"><span>POS Transactions</span><small>Invoice-wise transaction details</small></div>
+      <div class="pr-table-wrap"><table class="data-table" id="posReportTable"><thead><tr><th>Date</th><th>Invoice No.</th><th>Customer</th><th>Payment Mode</th><th class="num">Bill Amount</th><th class="num">Amount Received</th><th class="num">Change</th></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
     </div>
   </div>`;
 }
@@ -8305,40 +8310,52 @@ function mviappsPrintOtherIncomeCategoryReport(){
   .invoice-summary,.account-summary{position:static}
 }
 
-/* POS Report — dedicated report only; existing app styles/functions remain untouched. */
-.mvi-pos-report{--pr-border:rgba(100,116,139,.18);--pr-soft:rgba(99,102,241,.055)}
-.mvi-pos-report .pr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:18px}
+/* POS Report — dedicated report styling only. Existing app styles/functions remain untouched. */
+.mvi-pos-report{--pr-border:rgba(100,116,139,.18);--pr-soft:rgba(99,102,241,.055);--pr-muted:#64748b}
+.mvi-pos-report .pr-page-head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:16px}
 .mvi-pos-report .pr-title{display:flex;align-items:center;gap:12px}
-.mvi-pos-report .pr-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#eef2ff,#f5f3ff);font-size:21px;box-shadow:0 5px 16px rgba(79,70,229,.10)}
-.mvi-pos-report .pr-kicker{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.62;margin-bottom:3px}
-.mvi-pos-report .pr-main-title{font-size:21px;font-weight:800;letter-spacing:-.02em}
+.mvi-pos-report .pr-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#eef2ff,#f5f3ff);font-size:21px;box-shadow:0 5px 16px rgba(79,70,229,.10)}
+.mvi-pos-report .pr-kicker{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--pr-muted);margin-bottom:3px}
+.mvi-pos-report .pr-main-title{font-size:22px;font-weight:800;letter-spacing:-.02em}
 .mvi-pos-report .pr-subtitle{margin-top:3px}
-.mvi-pos-report .pr-filters{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:14px;align-items:end;padding:18px;border:1px solid var(--pr-border);border-radius:16px;background:linear-gradient(180deg,rgba(248,250,252,.92),rgba(255,255,255,.72))}
-.mvi-pos-report .pr-field label{display:block;font-size:12px;font-weight:700;margin:0 0 7px;opacity:.72}
-.mvi-pos-report .pr-field input,.mvi-pos-report .pr-field select{width:100%;min-height:40px;border-radius:10px}
-.mvi-pos-report .pr-actions{display:flex;gap:8px;align-items:end}
+.mvi-pos-report .pr-print-btn{white-space:nowrap}
+.mvi-pos-report .pr-filter-card,.mvi-pos-report .pr-result-card{background:#fff;border:1px solid var(--pr-border);border-radius:16px;box-shadow:0 4px 18px rgba(15,23,42,.035)}
+.mvi-pos-report .pr-filter-card{padding:18px;margin-bottom:16px}
+.mvi-pos-report .pr-section-title,.mvi-pos-report .pr-subsection-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.mvi-pos-report .pr-section-title{padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--pr-border)}
+.mvi-pos-report .pr-section-title span,.mvi-pos-report .pr-subsection-head span{font-size:14px;font-weight:800}
+.mvi-pos-report .pr-section-title small,.mvi-pos-report .pr-subsection-head small{font-size:11px;color:var(--pr-muted)}
+.mvi-pos-report .pr-filters{display:grid;grid-template-columns:1.1fr 1.1fr .9fr 1.35fr auto;gap:12px;align-items:end}
+.mvi-pos-report .pr-field label{display:block;font-size:11px;font-weight:800;margin:0 0 6px;color:#475569}
+.mvi-pos-report .pr-field input,.mvi-pos-report .pr-field select{width:100%;min-height:40px;border-radius:9px}
+.mvi-pos-report .pr-actions{display:flex;gap:7px;align-items:end}
 .mvi-pos-report .pr-actions .btn{min-height:40px;white-space:nowrap}
-.mvi-pos-report .pr-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:18px}
-.mvi-pos-report .pr-summary-card{border:1px solid var(--pr-border);border-radius:12px;padding:12px;background:#fff}
-.mvi-pos-report .pr-summary-card span{display:block;font-size:11px;color:var(--muted)}
-.mvi-pos-report .pr-summary-card b{display:block;font-size:17px;margin-top:5px}
-.mvi-pos-report .pr-payment-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px}
-.mvi-pos-report .pr-payment-card{border:1px solid var(--pr-border);border-radius:10px;padding:10px 12px;background:#fafbfc}
-.mvi-pos-report .pr-payment-card span{display:block;font-size:10px;color:var(--muted)}
-.mvi-pos-report .pr-payment-card b{display:block;margin-top:4px;font-size:14px}
-.mvi-pos-report .pr-report-head{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--pr-border)}
+.mvi-pos-report .pr-result-card{padding:18px}
+.mvi-pos-report .pr-report-head{display:flex;justify-content:space-between;align-items:center;gap:15px;padding-bottom:14px;border-bottom:1px solid var(--pr-border)}
 .mvi-pos-report .pr-report-title{font-size:17px;font-weight:800}
-.mvi-pos-report .pr-period{font-size:12px;margin-top:4px;opacity:.65}
-.mvi-pos-report .pr-total{padding:9px 13px;border-radius:11px;background:var(--pr-soft);font-weight:800;white-space:nowrap}
-.mvi-pos-report .pr-table-wrap{border:1px solid var(--pr-border);border-radius:13px;overflow:auto}
-.mvi-pos-report table.data-table{border:0;margin:0}
-.mvi-pos-report table.data-table thead th{position:sticky;top:0;z-index:1;font-size:12px;letter-spacing:.02em;white-space:nowrap}
+.mvi-pos-report .pr-period{font-size:12px;margin-top:4px;color:var(--pr-muted)}
+.mvi-pos-report .pr-total{padding:9px 13px;border-radius:10px;background:var(--pr-soft);font-weight:800;white-space:nowrap}
+.mvi-pos-report .pr-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0 18px}
+.mvi-pos-report .pr-summary-card{border:1px solid var(--pr-border);border-radius:11px;padding:12px;background:#fff}
+.mvi-pos-report .pr-summary-card span{display:block;font-size:10px;font-weight:700;color:var(--pr-muted)}
+.mvi-pos-report .pr-summary-card b{display:block;font-size:16px;margin-top:5px}
+.mvi-pos-report .pr-subsection-head{padding:11px 0 9px;border-top:1px solid var(--pr-border)}
+.mvi-pos-report .pr-payment-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+.mvi-pos-report .pr-payment-card{border:1px solid var(--pr-border);border-radius:10px;padding:10px 12px;background:#f8fafc}
+.mvi-pos-report .pr-payment-card span{display:block;font-size:10px;font-weight:700;color:var(--pr-muted)}
+.mvi-pos-report .pr-payment-card b{display:block;margin-top:4px;font-size:14px}
+.mvi-pos-report .pr-trans-head{margin-top:2px}
+.mvi-pos-report .pr-table-wrap{border:1px solid var(--pr-border);border-radius:11px;overflow:auto}
+.mvi-pos-report table.data-table{border:0;margin:0;width:100%}
+.mvi-pos-report table.data-table thead th{position:sticky;top:0;z-index:1;font-size:11px;letter-spacing:.02em;white-space:nowrap;background:#f8fafc}
 .mvi-pos-report table.data-table tbody td{height:42px}
 .mvi-pos-report table.data-table tbody tr:nth-child(even){background:rgba(248,250,252,.55)}
 .mvi-pos-report table.data-table tbody tr:hover{background:rgba(99,102,241,.045)}
+.mvi-pos-report table.data-table tfoot th{background:#f8fafc;font-weight:800;border-top:2px solid var(--pr-border)}
 .mvi-pos-report .num{text-align:right}
-@media(max-width:1000px){.mvi-pos-report .pr-filters{grid-template-columns:repeat(2,minmax(180px,1fr))}.mvi-pos-report .pr-summary,.mvi-pos-report .pr-payment-summary{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:620px){.mvi-pos-report .pr-head,.mvi-pos-report .pr-report-head{align-items:flex-start;flex-direction:column}.mvi-pos-report .pr-filters{grid-template-columns:1fr}.mvi-pos-report .pr-actions{flex-wrap:wrap}.mvi-pos-report .pr-summary,.mvi-pos-report .pr-payment-summary{grid-template-columns:1fr}}
+@media(max-width:1100px){.mvi-pos-report .pr-filters{grid-template-columns:repeat(2,minmax(180px,1fr))}.mvi-pos-report .pr-actions{grid-column:1/-1}.mvi-pos-report .pr-summary,.mvi-pos-report .pr-payment-summary{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.mvi-pos-report .pr-page-head,.mvi-pos-report .pr-report-head{align-items:flex-start;flex-direction:column}.mvi-pos-report .pr-filters{grid-template-columns:1fr}.mvi-pos-report .pr-actions{grid-column:auto}.mvi-pos-report .pr-summary,.mvi-pos-report .pr-payment-summary{grid-template-columns:1fr 1fr}.mvi-pos-report .pr-subsection-head,.mvi-pos-report .pr-section-title{align-items:flex-start;flex-direction:column;gap:3px}}
+@media(max-width:430px){.mvi-pos-report .pr-summary,.mvi-pos-report .pr-payment-summary{grid-template-columns:1fr}.mvi-pos-report .pr-result-card,.mvi-pos-report .pr-filter-card{padding:13px}}
 </style>
 </head><body><h2>Other Income Category Report</h2><p>${mviappsOtherIncomeReportEsc(period)}</p>${table.outerHTML}</body></html>`);w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
