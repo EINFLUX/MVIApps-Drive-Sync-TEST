@@ -1809,6 +1809,8 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
       <button onclick="show('report-bank-statement',this)">Bank Statement</button>
       <div class="report-group-label">Sale / Purchase Report</div>
       <button onclick="show('report-sale',this)">Sale</button><button onclick="show('report-purchase',this)">Purchase</button>
+      <div class="report-group-label">POS Report</div>
+      <button onclick="show('report-pos',this)">POS Sales</button>
       <div class="report-group-label">Other Income Report</div>
       <button onclick="show('report-other-income',this)">Other Income</button>
     </div></div>
@@ -3729,6 +3731,84 @@ function printBankStatement(){
   win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Bank Statement</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111827;font-size:12px}h3{margin:0 0 4px;font-size:18px}.report-result-head{display:flex;justify-content:space-between;gap:20px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #ddd}.table-wrap{overflow:visible}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #ddd;padding:7px;text-align:left}.table th{background:#f3f4f6}.table .num{text-align:right}</style></head><body>${source.innerHTML}</body></html>`); win.document.close(); setTimeout(()=>{win.focus();win.print();win.onafterprint=()=>win.close();},300);
 }
 
+
+function posReportPage(){
+  return `
+  <div class="mvi-pos-report">
+    <div class="card">
+      <div class="pr-head">
+        <div class="pr-title">
+          <div class="pr-icon">▣</div>
+          <div><div class="pr-kicker">Reports</div><div class="pr-main-title">POS Sales Report</div><div class="muted pr-subtitle">View POS bills and payment-mode totals for the selected period.</div></div>
+        </div>
+        <button class="btn" onclick="mviappsPrintPOSReport()" style="white-space:nowrap">Print / Save PDF</button>
+      </div>
+      <div class="pr-filters">
+        <div class="pr-field"><label>From Date</label><div class="pl-date-wrap"><input id="posReportFromDisplay" class="input" type="text" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('posReport','from')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('posReport','from')"><button type="button" class="pl-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openReportDatePicker('posReport','from')">&#128197;</button><input id="posReportFrom" type="date" aria-label="Select From Date" onchange="syncReportDateDisplay('posReport','from')"></div></div>
+        <div class="pr-field"><label>To Date</label><div class="pl-date-wrap"><input id="posReportToDisplay" class="input" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('posReport','to')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('posReport','to')"><button type="button" class="pl-calendar-btn" aria-label="Open To Date calendar" title="Select To Date" onclick="openReportDatePicker('posReport','to')">&#128197;</button><input id="posReportTo" type="date" aria-label="Select To Date" onchange="syncReportDateDisplay('posReport','to')"></div></div>
+        <div class="pr-field"><label>Payment Mode</label><select id="posReportMode"><option value="">All Payment Modes</option><option>Cash</option><option>UPI</option><option>Card</option><option>Bank</option><option>Credit</option></select></div>
+        <div class="pr-field"><label>Search</label><input id="posReportSearch" class="input" type="text" placeholder="Search invoice no. or customer"></div>
+        <div class="pr-actions"><button class="btn" onclick="mviappsRunPOSReport()">View Report</button></div>
+      </div>
+    </div>
+    <div class="card" id="posReportCard">
+      <div class="pr-report-head"><div><div class="pr-report-title">POS Transactions</div><div class="muted pr-period" id="posReportPeriod"></div></div><div class="pr-total" id="posReportTotal"></div></div>
+      <div class="pr-summary" id="posReportSummary"></div>
+      <div class="pr-payment-summary" id="posReportPaymentSummary"></div>
+      <div class="pr-table-wrap" style="margin-top:16px"><table class="data-table" id="posReportTable"><thead><tr><th>Date</th><th>Invoice No.</th><th>Customer</th><th>Payment Mode</th><th class="num">Bill Amount</th><th class="num">Amount Received</th><th class="num">Change</th></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+    </div>
+  </div>`;
+}
+
+function mviappsRunPOSReport(){
+  const from=document.getElementById('posReportFrom')?.value||'';
+  const to=document.getElementById('posReportTo')?.value||'';
+  const mode=document.getElementById('posReportMode')?.value||'';
+  const search=String(document.getElementById('posReportSearch')?.value||'').trim().toLowerCase();
+  let rows=JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]').filter(x=>x && String(x.notes||'')==='POS Sale');
+  rows=rows.filter(x=>{const d=String(x.date||'');if(from&&d<from)return false;if(to&&d>to)return false;if(mode&&String(x.paymentMode||'')!==mode)return false;if(search&&!(`${x.invoiceNo||''} ${x.customerName||''}`.toLowerCase().includes(search)))return false;return true;});
+  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.invoiceNo||'').localeCompare(String(a.invoiceNo||'')));
+  const total=rows.reduce((s,x)=>s+(Number(x.total)||0),0);
+  const received=rows.reduce((s,x)=>s+(Number(x.amountReceived)||0),0);
+  const change=rows.reduce((s,x)=>s+(Number(x.changeAmount)||0),0);
+  const cash=rows.filter(x=>x.paymentMode==='Cash').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const upi=rows.filter(x=>x.paymentMode==='UPI').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const card=rows.filter(x=>x.paymentMode==='Card').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const bank=rows.filter(x=>x.paymentMode==='Bank').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const credit=rows.filter(x=>x.paymentMode==='Credit').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const summary=document.getElementById('posReportSummary');
+  if(summary)summary.innerHTML=`<div class="pr-summary-card"><span>Total Bills</span><b>${rows.length}</b></div><div class="pr-summary-card"><span>Total POS Sales</span><b>${plMoney(total)}</b></div><div class="pr-summary-card"><span>Amount Received</span><b>${plMoney(received)}</b></div><div class="pr-summary-card"><span>Change Given</span><b>${plMoney(change)}</b></div><div class="pr-summary-card"><span>Average Bill</span><b>${plMoney(rows.length?total/rows.length:0)}</b></div>`;
+  const ps=document.getElementById('posReportPaymentSummary');
+  if(ps)ps.innerHTML=`<div class="pr-payment-card"><span>Cash</span><b>${plMoney(cash)}</b></div><div class="pr-payment-card"><span>UPI</span><b>${plMoney(upi)}</b></div><div class="pr-payment-card"><span>Card</span><b>${plMoney(card)}</b></div><div class="pr-payment-card"><span>Bank</span><b>${plMoney(bank)}</b></div><div class="pr-payment-card"><span>Credit</span><b>${plMoney(credit)}</b></div>`;
+  const tbody=document.querySelector('#posReportTable tbody');
+  const tfoot=document.querySelector('#posReportTable tfoot');
+  if(tbody)tbody.innerHTML=rows.map(x=>`<tr><td>${escapeHtml(String(x.date||'').split('-').reverse().join('/'))}</td><td>${escapeHtml(x.invoiceNo||'')}</td><td>${escapeHtml(x.customerName||'Walk-in / Cash Customer')}</td><td>${escapeHtml(x.paymentMode||'')}</td><td class="num">${plMoney(x.total)}</td><td class="num">${plMoney(x.amountReceived)}</td><td class="num">${plMoney(x.changeAmount)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No POS transactions found for the selected filters.</td></tr>';
+  if(tfoot)tfoot.innerHTML=rows.length?`<tr><th colspan="4" class="num">Total</th><th class="num">${plMoney(total)}</th><th class="num">${plMoney(received)}</th><th class="num">${plMoney(change)}</th></tr>`:'';
+  const period=document.getElementById('posReportPeriod');
+  if(period)period.textContent=reportPeriodLabel('posReport');
+  const totalEl=document.getElementById('posReportTotal');
+  if(totalEl)totalEl.textContent=`${rows.length} Bill${rows.length===1?'':'s'} • ${plMoney(total)}`;
+}
+
+function initPOSReport(){
+  const fy=getSelectedFinancialYear();
+  const start=Number(String(fy).split('-')[0])||new Date().getFullYear();
+  setReportDateValues('posReport',start+'-04-01',(start+1)+'-03-31');
+  if(document.getElementById('posReportMode'))document.getElementById('posReportMode').value='';
+  if(document.getElementById('posReportSearch'))document.getElementById('posReportSearch').value='';
+  mviappsRunPOSReport();
+}
+
+function mviappsPrintPOSReport(){
+  const el=document.getElementById('posReportCard');
+  if(!el){alert('Please open the POS report first.');return;}
+  const source=el.cloneNode(true);
+  const win=window.open('','_blank');
+  if(!win){alert('Please allow pop-ups to print the report.');return;}
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>POS Sales Report</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111827;font-size:11px}h1,h2,h3{margin:0}.pr-report-head{display:flex;justify-content:space-between;gap:20px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #ddd}.pr-report-title{font-size:17px;font-weight:800}.pr-period{font-size:10px;color:#667085;margin-top:3px}.pr-total{font-weight:800}.pr-summary,.pr-payment-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:8px 0}.pr-summary-card,.pr-payment-card{border:1px solid #ddd;border-radius:6px;padding:7px}.pr-summary-card span,.pr-payment-card span{display:block;font-size:9px;color:#667085}.pr-summary-card b,.pr-payment-card b{display:block;margin-top:3px}.pr-table-wrap{overflow:visible!important}.data-table{width:100%;border-collapse:collapse}.data-table th,.data-table td{border:1px solid #ddd;padding:6px;text-align:left}.data-table th{background:#f3f4f6}.num{text-align:right!important}.empty{text-align:center;padding:20px}</style></head><body>${source.innerHTML}</body></html>`);
+  win.document.close();setTimeout(()=>{win.focus();win.print();win.onafterprint=()=>win.close();},300);
+}
+
 const pages={
 dashboard:{title:"Dashboard",sub:"Business overview and quick actions",html:dashboard()},
 "party-details":{title:"Party Details",sub:"Manage customers and suppliers",html:partyDetails()},
@@ -3760,6 +3840,7 @@ expenses:{title:"Expenses",sub:"Record and manage business expenses",html:expens
 "report-item-details":{title:"Item Details",sub:"Stock / Item Report",html:itemDetailsReport()},
 "report-stock-transfer-details":{title:"Stock Transfer Details",sub:"Stock / Item Report",html:stockTransferReport()},
  "report-bank-statement":{title:"Bank Statement",sub:"Bank Report",html:bankStatementReport()},
+"report-pos":{title:"POS Sales",sub:"POS Report",html:posReportPage()},
  "report-expense":{
   title:"Expense",
   sub:"Expense Report",
@@ -8223,6 +8304,41 @@ function mviappsPrintOtherIncomeCategoryReport(){
   .account-layout,.invoice-layout{grid-template-columns:1fr}
   .invoice-summary,.account-summary{position:static}
 }
+
+/* POS Report — dedicated report only; existing app styles/functions remain untouched. */
+.mvi-pos-report{--pr-border:rgba(100,116,139,.18);--pr-soft:rgba(99,102,241,.055)}
+.mvi-pos-report .pr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:18px}
+.mvi-pos-report .pr-title{display:flex;align-items:center;gap:12px}
+.mvi-pos-report .pr-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#eef2ff,#f5f3ff);font-size:21px;box-shadow:0 5px 16px rgba(79,70,229,.10)}
+.mvi-pos-report .pr-kicker{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.62;margin-bottom:3px}
+.mvi-pos-report .pr-main-title{font-size:21px;font-weight:800;letter-spacing:-.02em}
+.mvi-pos-report .pr-subtitle{margin-top:3px}
+.mvi-pos-report .pr-filters{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:14px;align-items:end;padding:18px;border:1px solid var(--pr-border);border-radius:16px;background:linear-gradient(180deg,rgba(248,250,252,.92),rgba(255,255,255,.72))}
+.mvi-pos-report .pr-field label{display:block;font-size:12px;font-weight:700;margin:0 0 7px;opacity:.72}
+.mvi-pos-report .pr-field input,.mvi-pos-report .pr-field select{width:100%;min-height:40px;border-radius:10px}
+.mvi-pos-report .pr-actions{display:flex;gap:8px;align-items:end}
+.mvi-pos-report .pr-actions .btn{min-height:40px;white-space:nowrap}
+.mvi-pos-report .pr-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:18px}
+.mvi-pos-report .pr-summary-card{border:1px solid var(--pr-border);border-radius:12px;padding:12px;background:#fff}
+.mvi-pos-report .pr-summary-card span{display:block;font-size:11px;color:var(--muted)}
+.mvi-pos-report .pr-summary-card b{display:block;font-size:17px;margin-top:5px}
+.mvi-pos-report .pr-payment-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px}
+.mvi-pos-report .pr-payment-card{border:1px solid var(--pr-border);border-radius:10px;padding:10px 12px;background:#fafbfc}
+.mvi-pos-report .pr-payment-card span{display:block;font-size:10px;color:var(--muted)}
+.mvi-pos-report .pr-payment-card b{display:block;margin-top:4px;font-size:14px}
+.mvi-pos-report .pr-report-head{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--pr-border)}
+.mvi-pos-report .pr-report-title{font-size:17px;font-weight:800}
+.mvi-pos-report .pr-period{font-size:12px;margin-top:4px;opacity:.65}
+.mvi-pos-report .pr-total{padding:9px 13px;border-radius:11px;background:var(--pr-soft);font-weight:800;white-space:nowrap}
+.mvi-pos-report .pr-table-wrap{border:1px solid var(--pr-border);border-radius:13px;overflow:auto}
+.mvi-pos-report table.data-table{border:0;margin:0}
+.mvi-pos-report table.data-table thead th{position:sticky;top:0;z-index:1;font-size:12px;letter-spacing:.02em;white-space:nowrap}
+.mvi-pos-report table.data-table tbody td{height:42px}
+.mvi-pos-report table.data-table tbody tr:nth-child(even){background:rgba(248,250,252,.55)}
+.mvi-pos-report table.data-table tbody tr:hover{background:rgba(99,102,241,.045)}
+.mvi-pos-report .num{text-align:right}
+@media(max-width:1000px){.mvi-pos-report .pr-filters{grid-template-columns:repeat(2,minmax(180px,1fr))}.mvi-pos-report .pr-summary,.mvi-pos-report .pr-payment-summary{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.mvi-pos-report .pr-head,.mvi-pos-report .pr-report-head{align-items:flex-start;flex-direction:column}.mvi-pos-report .pr-filters{grid-template-columns:1fr}.mvi-pos-report .pr-actions{flex-wrap:wrap}.mvi-pos-report .pr-summary,.mvi-pos-report .pr-payment-summary{grid-template-columns:1fr}}
 </style>
 </head><body><h2>Other Income Category Report</h2><p>${mviappsOtherIncomeReportEsc(period)}</p>${table.outerHTML}</body></html>`);w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
@@ -8255,6 +8371,7 @@ function show(id,btn){ window._mviappsCurrentPage=id; window._mviappsCurrentBtn=
   if(id==='report-item-details' && typeof renderItemDetailsReport==='function') setTimeout(renderItemDetailsReport,0);
    if(id==='report-stock-transfer-details' && typeof initStockTransferReport==='function') setTimeout(initStockTransferReport,0);
   if(id==='report-expense' && typeof initExpenseReport==='function') setTimeout(initExpenseReport,0);
+  if(id==='report-pos' && typeof initPOSReport==='function') setTimeout(initPOSReport,0);
   if(id==='report-other-income' && typeof initOtherIncomeReport==='function') setTimeout(initOtherIncomeReport,0);
   
 
