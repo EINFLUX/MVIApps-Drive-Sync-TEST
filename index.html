@@ -460,7 +460,31 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
 .purchase-filter-date-wrap .purchase-filter-calendar-btn{position:absolute;right:1px;top:1px;width:40px;height:41px;border:0;border-left:1px solid var(--line);border-radius:0 8px 8px 0;background:#fff;color:var(--text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
 .purchase-filter-date-wrap .purchase-filter-calendar-btn:hover{background:#f5f7fa}
 .purchase-filter-date-wrap #purchaseInvoiceFrom,.purchase-filter-date-wrap #purchaseInvoiceTo{position:absolute;width:1px;height:1px;left:0;top:0;opacity:0;pointer-events:none;margin:0}
-.sale-popup-add-item-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}.sale-popup-add-icon{width:16px;height:16px;fill:currentColor;flex:0 0 16px}.purchase-item-picker{width:100%;}.purchase-item-picker .purchase-item{width:100%;min-width:0;}</style>
+.sale-popup-add-item-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}.sale-popup-add-icon{width:16px;height:16px;fill:currentColor;flex:0 0 16px}.purchase-item-picker{width:100%;}.purchase-item-picker .purchase-item{width:100%;min-width:0;}
+/* Basic Help Center: isolated styles; existing application styles remain unchanged. */
+.nav-icon.help{background:#0f9f8f;color:#fff}
+.help-page{display:flex;flex-direction:column;gap:18px}
+.help-hero{padding:24px;background:linear-gradient(135deg,#eef4ff,#f8fbff);border:1px solid #dbe5ff;border-radius:16px}
+.help-hero h2{margin:0 0 7px;font-size:23px;color:#172554}
+.help-hero p{margin:0;color:#475569;line-height:1.55}
+.help-search-wrap{margin-top:16px;max-width:680px}
+.help-search-wrap input{width:100%;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:14px;outline:none}
+.help-search-wrap input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(49,94,251,.1)}
+.help-topic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.help-topic{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:17px;min-width:0}
+.help-topic h3{font-size:15px;margin:0 0 10px}
+.help-topic details{border-top:1px solid var(--line);padding:10px 0}
+.help-topic details:first-of-type{border-top:0;padding-top:0}
+.help-topic summary{font-size:13px;font-weight:700;cursor:pointer;line-height:1.4}
+.help-topic details p,.help-topic details ol,.help-topic details ul{font-size:12px;line-height:1.6;color:var(--muted);margin:9px 0 0;padding-left:19px}
+.help-topic details p{padding-left:0}
+.help-topic .help-open-page{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;color:#1d4ed8;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer}
+.help-topic .help-open-page:hover{background:#eef2ff}
+.help-empty{display:none;padding:22px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px}
+.help-footnote{padding:13px 15px;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:12px;line-height:1.5}
+@media(max-width:760px){.help-topic-grid{grid-template-columns:1fr}.help-hero{padding:18px}.help-hero h2{font-size:20px}}
+
+</style>
 <style>
 
 /* Account Head popup - refined form styling */
@@ -1828,6 +1852,7 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon settings">⚙</span>Settings <span class="chev">⌄</span></button><div class="sub">
       <button onclick="show('company',this)">Company Details</button><button onclick="show('invoice-settings',this)">Invoice Settings</button><button onclick="show('tax-settings',this)">Tax Settings</button><button onclick="show('item-settings',this)">Item Settings</button><button onclick="show('item-categories',this)">Item Categories</button><button onclick="show('expense-categories',this)">Expense Categories</button><button onclick="show('income-heads',this)">Other Income Heads</button><button onclick="show('account-settings',this)">Accounts</button><button onclick="show('appearance',this)">Appearance</button><button onclick="show('security',this)">Security</button>
     </div></div>
+    <div class="group"><button onclick="show('help',this)"><span class="nav-icon help">?</span>Help Center</button></div>
   </div>
 <div class="mvi-powered-by" aria-label="Powered by Multi Vision Inc."><span>Powered by</span> <strong>Multi Vision Inc.</strong></div></aside>
 <main class="main">
@@ -3868,6 +3893,84 @@ function mviappsPrintPOSReport(){
   win.document.close();setTimeout(()=>{win.focus();win.print();win.onafterprint=()=>win.close();},300);
 }
 
+function helpCenterPage(){
+  return `<div class="help-page" id="mviHelpPage">
+    <div class="help-hero">
+      <h2>How can we help?</h2>
+      <p>Find quick instructions for common tasks in MVIApps. Choose a topic below or search for a word such as “sale”, “stock”, “payment” or “sync”.</p>
+      <div class="help-search-wrap"><input id="mviHelpSearch" type="search" placeholder="Search Help topics…" aria-label="Search Help topics" oninput="filterMviHelp(this.value)"></div>
+    </div>
+    <div class="help-topic-grid" id="mviHelpTopics">
+      <section class="help-topic" data-help-terms="parties customers suppliers party details ledger receivable payable opening balance">
+        <h3>Parties &amp; Balances</h3>
+        <details><summary>Add or update a party</summary><ol><li>Open <b>Parties → Party Details</b>.</li><li>Choose the option to add a party, enter the available contact and opening-balance details, then save.</li><li>To correct saved details, use the available Modify/Edit action.</li></ol></details>
+        <details><summary>Check a party ledger</summary><ol><li>Open <b>Parties → Party Ledger</b>.</li><li>Select the party and review the date range or financial-year selection.</li><li>Check the opening balance, transactions and closing balance before printing or exporting.</li></ol></details>
+        <button class="help-open-page" onclick="show('party-details')">Open Party Details</button>
+      </section>
+      <section class="help-topic" data-help-terms="items inventory stock item code category opening quantity godown transfer">
+        <h3>Items &amp; Inventory</h3>
+        <details><summary>Add or edit an item</summary><ol><li>Open <b>Items → Item Details</b>.</li><li>Enter the item name and relevant code, category, unit, rates and stock details.</li><li>Save the item. Use the item list’s available view or modify actions to review it later.</li></ol></details>
+        <details><summary>Check stock or godown quantity</summary><ol><li>Open <b>Items → Stock Summary</b> for a stock overview, or <b>Items → Godown Management</b> for godown-wise stock.</li><li>For transfers, open the stock-transfer area and carefully select the source, destination, item and quantity.</li><li>Review the resulting stock before making another entry.</li></ol></details>
+        <button class="help-open-page" onclick="show('item-details')">Open Item Details</button>
+      </section>
+      <section class="help-topic" data-help-terms="sale invoice sales customer bill payment in other income">
+        <h3>Sales &amp; Receipts</h3>
+        <details><summary>Create a sale invoice</summary><ol><li>Open <b>Sale → Sale Invoices</b> and start a new invoice.</li><li>Select the party, enter the invoice date and add items with quantities and rates.</li><li>Review tax, discount and total values, then save the invoice.</li></ol></details>
+        <details><summary>Record money received</summary><ol><li>Open <b>Sale → Payment-In</b>.</li><li>Enter the relevant party, date, amount and payment details.</li><li>Check the amount and payment mode before saving.</li></ol></details>
+        <button class="help-open-page" onclick="show('sale-invoices')">Open Sale Invoices</button>
+      </section>
+      <section class="help-topic" data-help-terms="pos point of sale barcode scanner scan item checkout cash sale">
+        <h3>Point of Sale (POS)</h3>
+        <details><summary>Make a POS sale</summary><ol><li>Open <b>Point of Sale (POS)</b> from the sidebar.</li><li>Search for an item or use the barcode-scanning option if your setup supports it.</li><li>Confirm the item, quantity and price, review the total, and complete the sale using the available on-screen controls.</li></ol></details>
+        <details><summary>Barcode scanning notes</summary><p>A USB/Bluetooth barcode scanner that types the barcode can work like keyboard input when the barcode field is focused. Phone-based scanning depends on the mobile-scanning feature and its connection/setup; follow the instructions shown by your current POS screen.</p></details>
+        <button class="help-open-page" onclick="show('point-of-sale')">Open POS</button>
+      </section>
+      <section class="help-topic" data-help-terms="purchase expense supplier payment out returns">
+        <h3>Purchases &amp; Expenses</h3>
+        <details><summary>Enter a purchase</summary><ol><li>Open <b>Purchase &amp; Expense → Purchase Invoices</b>.</li><li>Select the supplier, add the purchased items and enter quantities, rates and other required details.</li><li>Review the invoice total and save.</li></ol></details>
+        <details><summary>Record an expense or payment</summary><p>Use <b>Expenses</b> to record an expense and <b>Payment-Out</b> to record money paid. Check the date, category or party, payment mode and amount before saving.</p></details>
+        <button class="help-open-page" onclick="show('purchase-invoices')">Open Purchase Invoices</button>
+      </section>
+      <section class="help-topic" data-help-terms="reports profit loss balance sheet stock summary party statement bank statement print pdf">
+        <h3>Reports &amp; Printing</h3>
+        <details><summary>View a report</summary><ol><li>Open <b>Reports</b> and choose the required report.</li><li>Set the financial year, dates, party or other filters that the report provides.</li><li>Run or refresh the report and verify the figures and selected period.</li></ol></details>
+        <details><summary>Print or save as PDF</summary><p>Use the report’s available Print or PDF option. In the browser print window, select a printer or “Save as PDF” if available, then check the page size and preview before saving.</p></details>
+        <button class="help-open-page" onclick="show('report-profit-loss')">Open Reports</button>
+      </section>
+      <section class="help-topic" data-help-terms="backup restore data safety export import protect data">
+        <h3>Backup &amp; Restore</h3>
+        <details><summary>Create a backup</summary><ol><li>Open <b>Utilities → Backup / Restore</b>.</li><li>Use the available backup/export control and save the file somewhere safe.</li><li>Keep a backup before major changes or restoring data.</li></ol></details>
+        <details><summary>Restore a backup</summary><p>Open the same Backup / Restore page and use its restore/import option. Select the correct backup file and carefully read the app’s confirmation messages; restoring may replace data currently on this device.</p></details>
+        <button class="help-open-page" onclick="show('utilities')">Open Backup / Restore</button>
+      </section>
+      <section class="help-topic" data-help-terms="google drive sync cloud device merge conflict connect account">
+        <h3>Google Drive Sync</h3>
+        <details><summary>Connect and sync</summary><ol><li>Open <b>Utilities → Drive Sync</b>.</li><li>Follow the page’s connection instructions and authorize the Google account when prompted.</li><li>Use the sync controls and read the status message before moving to another device.</li></ol></details>
+        <details><summary>Conflict or unexpected data</summary><p>If a conflict warning appears, do not guess which copy to keep. Make a backup first, review the app’s explicit local/cloud choices, and select the correct source only after checking the data. Do not clear browser data as a troubleshooting shortcut.</p></details>
+        <p><b>Important:</b> Sync is separate from the Help Center. These instructions do not change or run Drive Sync.</p>
+        <button class="help-open-page" onclick="show('drive-sync')">Open Drive Sync</button>
+      </section>
+      <section class="help-topic" data-help-terms="financial year settings company security password user id login appearance">
+        <h3>Settings &amp; Access</h3>
+        <details><summary>Select a financial year</summary><p>Use the Financial Year selector in the top bar. Check the selected year before entering transactions or reviewing reports.</p></details>
+        <details><summary>Company, appearance and security</summary><p>Open <b>Settings</b> to review company details, invoice/tax settings, appearance and security options. Change only the settings you understand, and keep your login details private.</p></details>
+        <button class="help-open-page" onclick="show('security')">Open Security Settings</button>
+      </section>
+    </div>
+    <div class="help-empty" id="mviHelpEmpty">No matching Help topics. Try another search word.</div>
+    <div class="help-footnote"><b>Need more help?</b> If a screen looks different from these instructions, use the labels and prompts shown in your current version of MVIApps. Always back up important data before restoring or making major data changes.</div>
+  </div>`;
+}
+function filterMviHelp(query){
+  const root=document.getElementById('mviHelpPage');if(!root)return;
+  const q=String(query||'').toLowerCase().trim();let visible=0;
+  root.querySelectorAll('.help-topic').forEach(card=>{
+    const match=!q||(card.innerText+' '+(card.getAttribute('data-help-terms')||'')).toLowerCase().includes(q);
+    card.style.display=match?'':'none';if(match)visible++;
+  });
+  const empty=root.querySelector('#mviHelpEmpty');if(empty)empty.style.display=visible?'none':'block';
+}
+
 const pages={
 dashboard:{title:"Dashboard",sub:"Business overview and quick actions",html:dashboard()},
 "party-details":{title:"Party Details",sub:"Manage customers and suppliers",html:partyDetails()},
@@ -4005,7 +4108,8 @@ company:{title:"Company Details",sub:"Business identity, contact, tax and addres
 "income-heads":{title:"Other Income Heads",sub:"Add, modify and delete other income heads",html:incomeHeads()},
 "account-settings":{title:"Accounts",sub:"Manage cash, bank and other business accounts",html:accountSettings()},
 appearance:{title:"Appearance",sub:"Customize application branding, layout and print preferences",html:appearanceSettings()},
-security:{title:"Security",sub:"Protect the application and control access",html:securitySettings()}
+security:{title:"Security",sub:"Protect the application and control access",html:securitySettings()},
+help:{title:"Help Center",sub:"Quick instructions for using MVIApps",html:helpCenterPage()}
 };
 function getCompanyBranding(){
   const name=localStorage.getItem('mviapps_companyName')||localStorage.getItem('mviapps_tradeName')||'mviapps';
