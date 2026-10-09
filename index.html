@@ -2396,12 +2396,13 @@ function generatePartyStatement(){
     else if(x.type==='Payment-In') receivable=Math.max(0,receivable-x.amount);
     else if(x.type==='Credit Note') receivable=Math.max(0,receivable-x.amount);
     else if(x.type==='Purchase') payable+=x.amount;
+    else if(x.type==='Expense' && mode==='credit') payable+=x.amount;
     else if(x.type==='Payment-Out') payable=Math.max(0,payable-x.amount);
     else if(x.type==='Debit Note') payable=Math.max(0,payable-x.amount);
     const status=(x.type==='Purchase'||x.type==='Sale'||x.type==='Expense')?(mode==='credit'?'Unpaid':'Paid'):(x.type==='Payment-In'||x.type==='Payment-Out'?'Used':'—');
     const receivedPaid=(x.type==='Payment-In'||x.type==='Payment-Out')?x.amount:0;
     const txnBalance=(x.type==='Payment-In'||x.type==='Payment-Out')?'':(mode==='credit'||x.type==='Purchase'||x.type==='Debit Note'?x.amount:(x.type==='Sale'||x.type==='Expense'?x.amount:0));
-    const running=x.type==='Purchase'||x.type==='Debit Note'?payable:(x.type==='Payment-Out'?payable:(x.type==='Sale'&&mode==='credit'?receivable:(x.type==='Payment-In'?receivable:(x.type==='Credit Note'?receivable:(x.type==='Sale'?receivable:bal)))));
+    const running=(x.type==='Purchase'||x.type==='Debit Note'||x.type==='Payment-Out'||(x.type==='Expense'&&mode==='credit'))?payable:(x.type==='Sale'&&mode==='credit'?receivable:(x.type==='Payment-In'?receivable:(x.type==='Credit Note'?receivable:(x.type==='Sale'?receivable:bal))));
     const items=Array.isArray(rec.items)?rec.items:[];
     const itemRows=items.map((it,i)=>{
       const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(z=>String(z.id)===String(it.itemId));
@@ -2410,15 +2411,7 @@ function generatePartyStatement(){
       return `<tr class="ps-item-row"><td class="ps-item-no">${i+1}</td><td class="ps-item-name"><b>${escapeHtml(item?.name||'Item')}</b></td><td class="num">${qty}</td><td>${escapeHtml(item?.unit||'Pcs')}</td><td class="num">${plMoney(rate)}</td><td class="num">${plMoney(amount)}</td></tr>`;
     }).join('');
     const itemBlock=items.length?`<tr class="ps-items-head"><td></td><td><b># &nbsp; Item name</b></td><td class="num"><b>Quantity</b></td><td><b>Unit</b></td><td class="num"><b>Price/ Unit</b></td><td class="num"><b>Amount</b></td></tr>${itemRows}<tr class="ps-subtotal"><td colspan="5">Sub Total</td><td class="num">${plMoney(x.amount)}</td></tr>`:'';
-    const txnType=String(x.type||'').trim();
-    const isPaymentTxn=/^Payment-(In|Out)$/i.test(txnType);
-    const isExpenseTxn=/^Expense$/i.test(txnType);
-    const isOtherIncomeTxn=/^Other Income$/i.test(txnType);
-    const paymentTypeValue=String(rec.paymentMode||rec.paymentType||rec.paymentMethod||rec.mode||rec.transactionType||'').trim();
-    const paymentRefValue=String(rec.reference||rec.paymentRefNo||rec.paymentReference||rec.paymentReferenceNo||rec.paymentRef||rec.refNo||rec.transactionReference||rec.bankReference||rec.utr||'').trim();
-    const accountValue=rec.account||rec.bankAccount||'';
-    const paymentTypeDisplay=paymentTypeValue||((String(accountValue).trim())?mviappsBankDisplay(accountValue):'—');
-    const details=(isPaymentTxn||isExpenseTxn||isOtherIncomeTxn)?`<tr class="ps-detail"><td colspan="6">${(isPaymentTxn||isExpenseTxn)?`<b>Payment Type:</b> ${escapeHtml(paymentTypeDisplay)}${paymentRefValue?` &nbsp; <b>Payment Ref No.:</b> ${escapeHtml(paymentRefValue)}`:''}${rec.notes?`<br><b>Description:</b> ${escapeHtml(rec.notes)}`:''}`:`<b>Description:</b> ${escapeHtml(rec.notes||'—')}`}</td></tr>`:'';
+    const details=(x.type==='Payment-In'||x.type==='Payment-Out'||x.type==='Expense'||x.type==='Other Income')?`<tr class="ps-detail"><td colspan="6"><b>${x.type==='Expense'?'Description':x.type==='Other Income'?'Description':'Payment Type'}:</b> ${escapeHtml(rec.paymentMode||rec.notes||((String(rec.paymentMode||'').toLowerCase()==='bank'||String(rec.paymentMode||'').toLowerCase()==='bank transfer')?mviappsBankDisplay(rec.account||rec.bankAccount||''):rec.account||'—'))}${rec.reference?` &nbsp; <b>Payment Ref No.:</b> ${escapeHtml(rec.reference)}`:''}${rec.notes&&x.type!=='Expense'&&x.type!=='Other Income'?`<br><b>Description:</b> ${escapeHtml(rec.notes)}`:''}</td></tr>`:'';
     html+=`<tr class="ps-txn"><td>${escapeHtml(x.date.split('-').reverse().join('/'))}</td><td><b>${escapeHtml(x.type)}</b></td><td>${escapeHtml(x.ref||'')}</td><td><b>${escapeHtml(status)}</b></td><td class="num">${plMoney(x.amount)}</td><td class="num">${receivedPaid?plMoney(receivedPaid):''}</td><td class="num">${txnBalance?plMoney(txnBalance):''}</td><td class="num">${receivable?plMoney(receivable):''}</td><td class="num">${payable?plMoney(payable):''}</td></tr>${itemBlock}${details}`;
   });
   const c=getCompanyDetails(), companyName=c.name||'Company Name';
