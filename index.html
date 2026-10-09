@@ -5512,8 +5512,18 @@ function pointOfSalePage(){
     .mvi-pos-input:focus{outline:2px solid rgba(37,99,235,.14);border-color:#6b8cff}
     .mvi-pos-right-head{padding:10px 12px;border-bottom:1px solid #d7dee8}
     .mvi-pos-date{height:38px}
-    .mvi-pos-customer{margin-top:10px}
-    .mvi-pos-customer select{width:100%;height:42px}
+    .mvi-pos-customer{margin-top:10px;position:relative}
+    .mvi-pos-customer select{display:none}
+    .mvi-pos-customer-trigger{width:100%;height:42px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #b9c5d5;border-radius:6px;padding:7px 10px;background:#fff;color:#111827;text-align:left;cursor:pointer;font-size:13px}
+    .mvi-pos-customer-trigger:focus{outline:2px solid rgba(37,99,235,.14);border-color:#6b8cff}
+    .mvi-pos-customer-popup{position:absolute;left:0;right:0;top:46px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 12px 28px rgba(15,23,42,.18);z-index:10060;display:none;overflow:hidden}
+    .mvi-pos-customer-popup.open{display:block}
+    .mvi-pos-customer-search{width:100%;height:42px;border:0;border-bottom:1px solid #e2e8f0;padding:0 12px;font-size:14px;outline:none;box-sizing:border-box}
+    .mvi-pos-customer-results{max-height:260px;overflow:auto}
+    .mvi-pos-customer-option{display:block;width:100%;border:0;border-bottom:1px solid #f1f5f9;background:#fff;padding:10px 12px;text-align:left;cursor:pointer;color:#111827}
+    .mvi-pos-customer-option:hover,.mvi-pos-customer-option:focus{background:#eff6ff;outline:none}
+    .mvi-pos-customer-option small{display:block;color:#64748b;font-size:11px;margin-top:3px}
+    .mvi-pos-customer-empty{padding:14px 12px;color:#64748b;font-size:12px}
     .mvi-pos-summary{border-bottom:1px solid #d7dee8;padding:14px 12px}
     .mvi-pos-total-row{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:16px}
     .mvi-pos-total-row strong{font-size:18px}
@@ -5650,8 +5660,13 @@ function pointOfSalePage(){
       <div class="mvi-pos-right-head">
         <input id="posDateDisplay" class="mvi-pos-input mvi-pos-date" type="text" value="${today.split('-').reverse().join('/')}" readonly onclick="posOpenDatePicker()" aria-label="POS Date">
         <input id="posDate" type="date" value="${today}" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" onchange="posSyncDateDisplay()">
-        <div class="mvi-pos-customer">
+        <div class="mvi-pos-customer" id="posCustomerPicker">
           <select id="posCustomer" class="mvi-pos-input" onchange="posUpdateCustomer()"></select>
+          <button type="button" id="posCustomerTrigger" class="mvi-pos-customer-trigger" onclick="posToggleCustomerPicker()" aria-haspopup="listbox" aria-expanded="false"><span id="posCustomerSelectedLabel">Walk-in / Cash Customer</span><span aria-hidden="true">▾</span></button>
+          <div id="posCustomerPopup" class="mvi-pos-customer-popup">
+            <input id="posCustomerSearch" class="mvi-pos-customer-search" type="search" placeholder="Search customer by name or phone..." autocomplete="off" oninput="posRenderCustomerOptions()" onkeydown="posCustomerSearchKeydown(event)" aria-label="Search customer by name or phone">
+            <div id="posCustomerResults" class="mvi-pos-customer-results" role="listbox"></div>
+          </div>
         </div>
       </div>
       <div class="mvi-pos-summary">
@@ -5684,7 +5699,60 @@ function posLoadCustomers(){
   const el=document.getElementById('posCustomer');if(!el)return;
   const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
   el.innerHTML='<option value="">Walk-in / Cash Customer</option>'+parties.map(p=>`<option value="${escapeAttr(p.id)}">${escapeHtml(p.name||'')}</option>`).join('');
+  posSyncCustomerPickerLabel();
+  posRenderCustomerOptions();
 }
+
+function posCustomerPhone(p){
+  return String(p?.phone||p?.mobile||p?.phoneNumber||p?.mobileNo||p?.contact||p?.contactNo||'').trim();
+}
+function posSyncCustomerPickerLabel(){
+  const select=document.getElementById('posCustomer');
+  const label=document.getElementById('posCustomerSelectedLabel');
+  if(!select||!label)return;
+  const option=select.selectedOptions?.[0];
+  label.textContent=option?.textContent||'Walk-in / Cash Customer';
+}
+function posToggleCustomerPicker(){
+  const popup=document.getElementById('posCustomerPopup');
+  const trigger=document.getElementById('posCustomerTrigger');
+  const search=document.getElementById('posCustomerSearch');
+  if(!popup||!trigger)return;
+  const opening=!popup.classList.contains('open');
+  popup.classList.toggle('open',opening);
+  trigger.setAttribute('aria-expanded',opening?'true':'false');
+  if(opening){if(search)search.value='';posRenderCustomerOptions();setTimeout(()=>search?.focus(),0);}
+}
+function posCloseCustomerPicker(){
+  const popup=document.getElementById('posCustomerPopup');
+  const trigger=document.getElementById('posCustomerTrigger');
+  popup?.classList.remove('open');trigger?.setAttribute('aria-expanded','false');
+}
+function posRenderCustomerOptions(){
+  const results=document.getElementById('posCustomerResults');
+  if(!results)return;
+  const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
+  const q=String(document.getElementById('posCustomerSearch')?.value||'').trim().toLowerCase();
+  const matches=parties.filter(p=>!q||String(p.name||'').toLowerCase().includes(q)||posCustomerPhone(p).toLowerCase().includes(q));
+  const walkIn=`<button type="button" class="mvi-pos-customer-option" role="option" onclick="posChooseCustomer('')"><b>Walk-in / Cash Customer</b><small>Default customer</small></button>`;
+  const partyOptions=matches.map(p=>`<button type="button" class="mvi-pos-customer-option" role="option" onclick="posChooseCustomer('${escapeAttr(p.id)}')"><b>${escapeHtml(p.name||'Unnamed Customer')}</b><small>${escapeHtml(posCustomerPhone(p)||'Phone not available')}</small></button>`).join('');
+  results.innerHTML=walkIn+(partyOptions||(!q?'<div class="mvi-pos-customer-empty">No saved customers found.</div>':'<div class="mvi-pos-customer-empty">No matching customer. Try another name or phone number.</div>'));
+}
+function posChooseCustomer(id){
+  const select=document.getElementById('posCustomer');if(!select)return;
+  select.value=String(id||'');
+  posSyncCustomerPickerLabel();
+  posCloseCustomerPicker();
+  if(typeof posUpdateCustomer==='function')posUpdateCustomer();
+}
+function posCustomerSearchKeydown(event){
+  if(event.key==='Escape'){event.preventDefault();posCloseCustomerPicker();document.getElementById('posCustomerTrigger')?.focus();}
+  if(event.key==='Enter'){event.preventDefault();const first=document.querySelector('#posCustomerResults .mvi-pos-customer-option');first?.click();}
+}
+document.addEventListener('click',function(event){
+  const picker=document.getElementById('posCustomerPicker');
+  if(picker&&!picker.contains(event.target))posCloseCustomerPicker();
+});
 
 function posGetItems(){
   return JSON.parse(localStorage.getItem('mviapps_items')||'[]');
@@ -5893,7 +5961,7 @@ function posEditHistoryBill(id){
   const d=document.getElementById('posDate'),dd=document.getElementById('posDateDisplay');
   if(d)d.value=b.date||'';if(dd)dd.value=b.date?b.date.split('-').reverse().join('/'):'';
   posLoadCustomers();
-  const c=document.getElementById('posCustomer');if(c)c.value=b.customer||'';
+  const c=document.getElementById('posCustomer');if(c){c.value=b.customer||'';posSyncCustomerPickerLabel();}
   posLoadBankAccounts(b.bankAccount||'');
   const p=document.getElementById('posPaymentMode');if(p){p.value=b.paymentMode||'Cash';posPaymentModeChanged();}
   const ba=document.getElementById('posBankAccount');if(ba)ba.value=b.bankAccount||'';
@@ -5979,7 +6047,7 @@ function posRecallHeldBill(id){
   const d=document.getElementById('posDate'),dd=document.getElementById('posDateDisplay');
   if(d)d.value=b.date||'';if(dd)dd.value=b.date?b.date.split('-').reverse().join('/'):'';
   posLoadCustomers();
-  const c=document.getElementById('posCustomer');if(c)c.value=b.customerId||'';
+  const c=document.getElementById('posCustomer');if(c){c.value=b.customerId||'';posSyncCustomerPickerLabel();}
   posLoadBankAccounts(b.bankAccount||'');
   const p=document.getElementById('posPaymentMode');if(p){p.value=b.paymentMode||'Cash';posPaymentModeChanged();}
   const ba=document.getElementById('posBankAccount');if(ba)ba.value=b.bankAccount||'';
