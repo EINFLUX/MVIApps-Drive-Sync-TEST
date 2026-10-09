@@ -5110,12 +5110,20 @@ async function optimizeAndMigrateItemsNow(){
 async function saveItem(){
  const name=document.getElementById('itemName')?.value.trim();
  if(!name){alert('Please enter Item Name.');return}
+ const code=(document.getElementById('itemCode')?.value||'').trim();
+ const existingItems=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
+ if(code && existingItems.some(x=>String(x?.code||'').trim().toLowerCase()===code.toLowerCase())){
+  alert('Item Code already exists! Please enter a different Item Code.');
+  document.getElementById('itemCode')?.focus();
+  return;
+ }
  const file=document.getElementById('itemImage')?.files?.[0];
  const finish=async(image='')=>{
-  const item={id:Date.now()+Math.random(),createdAt:new Date().toISOString().slice(0,10),name,code:document.getElementById('itemCode').value.trim(),category:document.getElementById('itemCategory').value.trim(),brand:document.getElementById('itemBrand').value.trim(),unit:document.getElementById('itemUnit').value.trim(),hsn:document.getElementById('itemHsn').value.trim(),weight:document.getElementById('itemWeight').value||'0',weightUnit:document.getElementById('itemWeightUnit').value||'KG',dimension:document.getElementById('itemDimension').value.trim(),dimensionUnit:document.getElementById('itemDimensionUnit').value||'CM',gst:document.getElementById('itemGst').value||'0',source:document.getElementById('itemSource').value.trim(),qty:document.getElementById('itemQty').value||'0',value:document.getElementById('itemValue').value||'0',purchase:document.getElementById('itemPurchase').value||'0',sale:document.getElementById('itemSale').value||'0',wholesale:document.getElementById('itemWholesale').value||'0',retail:document.getElementById('itemRetail').value||'0',min:document.getElementById('itemMin').value||'0'};
+  const item={id:Date.now()+Math.random(),createdAt:new Date().toISOString().slice(0,10),name,code,category:document.getElementById('itemCategory').value.trim(),brand:document.getElementById('itemBrand').value.trim(),unit:document.getElementById('itemUnit').value.trim(),hsn:document.getElementById('itemHsn').value.trim(),weight:document.getElementById('itemWeight').value||'0',weightUnit:document.getElementById('itemWeightUnit').value||'KG',dimension:document.getElementById('itemDimension').value.trim(),dimensionUnit:document.getElementById('itemDimensionUnit').value||'CM',gst:document.getElementById('itemGst').value||'0',source:document.getElementById('itemSource').value.trim(),qty:document.getElementById('itemQty').value||'0',value:document.getElementById('itemValue').value||'0',purchase:document.getElementById('itemPurchase').value||'0',sale:document.getElementById('itemSale').value||'0',wholesale:document.getElementById('itemWholesale').value||'0',retail:document.getElementById('itemRetail').value||'0',min:document.getElementById('itemMin').value||'0'};
   try{
    const storedItem=await prepareItemForStorage(item,image);
    const items=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
+   if(code && items.some(x=>String(x?.code||'').trim().toLowerCase()===code.toLowerCase())){alert('Item Code already exists! Please enter a different Item Code.');document.getElementById('itemCode')?.focus();return;}
    localStorage.setItem('mviapps_items',JSON.stringify(items.concat(storedItem)));
   }catch(e){alert('Item save nahi ho paya. IndexedDB storage available nahi hai. Browser mein IndexedDB/site data allow karke dobara try karein.');return;}
   let gs=getGodowns();
@@ -5287,8 +5295,10 @@ if(!name){alert('Please enter Item Name.');return;}
 const items=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
 const idx=items.findIndex(x=>x.id===id);if(idx<0){alert('Item not found.');return;}
 const old=items[idx],file=document.getElementById('editItemImage')?.files?.[0];
+const updatedCode=(document.getElementById('editItemCode')?.value||'').trim();
+if(updatedCode && items.some((x,i)=>i!==idx&&String(x?.code||'').trim().toLowerCase()===updatedCode.toLowerCase())){alert('Item Code already exists! Please enter a different Item Code.');document.getElementById('editItemCode')?.focus();return;}
 const finish=async(imageData,hasNewImage)=>{
- const updated={...old,name,code:document.getElementById('editItemCode').value.trim(),category:document.getElementById('editItemCategory').value.trim(),brand:document.getElementById('editItemBrand').value.trim(),unit:document.getElementById('editItemUnit').value.trim(),hsn:document.getElementById('editItemHsn').value.trim(),weight:document.getElementById('editItemWeight').value||'0',weightUnit:document.getElementById('editItemWeightUnit').value||'KG',dimension:document.getElementById('editItemDimension').value.trim(),dimensionUnit:document.getElementById('editItemDimensionUnit').value||'CM',gst:document.getElementById('editItemGst').value||'0',source:document.getElementById('editItemSource').value.trim(),qty:document.getElementById('editItemQty').value||'0',value:document.getElementById('editItemValue').value||'0',purchase:document.getElementById('editItemPurchase').value||'0',sale:document.getElementById('editItemSale').value||'0',wholesale:document.getElementById('editItemWholesale').value||'0',retail:document.getElementById('editItemRetail').value||'0',min:document.getElementById('editItemMin').value||'0'};
+ const updated={...old,name,code:updatedCode,category:document.getElementById('editItemCategory').value.trim(),brand:document.getElementById('editItemBrand').value.trim(),unit:document.getElementById('editItemUnit').value.trim(),hsn:document.getElementById('editItemHsn').value.trim(),weight:document.getElementById('editItemWeight').value||'0',weightUnit:document.getElementById('editItemWeightUnit').value||'KG',dimension:document.getElementById('editItemDimension').value.trim(),dimensionUnit:document.getElementById('editItemDimensionUnit').value||'CM',gst:document.getElementById('editItemGst').value||'0',source:document.getElementById('editItemSource').value.trim(),qty:document.getElementById('editItemQty').value||'0',value:document.getElementById('editItemValue').value||'0',purchase:document.getElementById('editItemPurchase').value||'0',sale:document.getElementById('editItemSale').value||'0',wholesale:document.getElementById('editItemWholesale').value||'0',retail:document.getElementById('editItemRetail').value||'0',min:document.getElementById('editItemMin').value||'0'};
  try{
   if(hasNewImage){await putMVIItemImage(id,imageData);updated.imageKey=String(id);delete updated.image;}
   else if(old.imageKey){updated.imageKey=String(old.imageKey);delete updated.image;}
