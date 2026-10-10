@@ -2452,7 +2452,7 @@ function printPartyStatement(){
       itemHTML=`<table class="ps-item-table"><thead><tr>${[0,1,2,3,4,5].map(i=>`<th class="${i===2||i===4||i===5?'num':''}">${cellHTML(head,i)}</th>`).join('')}</tr></thead><tbody>`;
       itemHTML+=t.items.map(r=>`<tr>${[0,1,2,3,4,5].map(i=>`<td class="${i===2||i===4||i===5?'num':''}">${cellHTML(r,i)}</td>`).join('')}</tr>`).join('');
       if(t.subtotal){
-        itemHTML+=`<tr class="ps-subtotal-row"><td colspan="5">${cellHTML(t.subtotal,0)}</td><td class="num">${cellHTML(t.subtotal,1)}</td></tr>`;
+        itemHTML+=`<tr class="ps-subtotal-row"><td colspan="5">${cellHTML(t.subtotal,0)}</td><td class="num">${cellHTML(t.subtotal,5)}</td></tr>`;
       }
       itemHTML+='</tbody></table>';
     }
@@ -6764,12 +6764,24 @@ function openSaleAddItemPopup(){
   setTimeout(()=>document.getElementById('salePopupItemSearch')?.focus(),50);
 }
 function salePopupItemInput(input){
-  const sel=document.getElementById('salePopupItem');if(!sel)return;
-  const value=(input.value||'').trim().toLowerCase();
-  const option=Array.from(sel.options).find(o=>o.value&&o.textContent.trim().toLowerCase()===value);
-  if(option){sel.value=option.value;salePopupItemChanged();return;}
-  const partial=Array.from(sel.options).find(o=>o.value&&o.textContent.toLowerCase().includes(value));
-  if(value && partial && input.value.trim()===partial.textContent.trim()){sel.value=partial.value;salePopupItemChanged();}
+  const sel=document.getElementById('salePopupItem');if(!sel||!input)return;
+  const raw=String(input.value||'').trim();
+  const normalize=v=>String(v||'').toLowerCase().normalize('NFKC').replace(/[—–−]/g,'-').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  const value=normalize(raw);
+  if(!value){sel.value='';updateSalePopupAvailability();return;}
+  const options=Array.from(sel.options).filter(o=>o.value);
+  // Match the full displayed label first, then item name/code separately. This
+  // avoids the hidden item selector remaining blank when a datalist suggestion is chosen.
+  let option=options.find(o=>normalize(o.textContent)===value);
+  if(!option) option=options.find(o=>{
+    const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(o.value));
+    return item && (normalize(item.name)===value || (item.code && normalize(item.code)===value));
+  });
+  if(!option && value.length>=3){
+    const matches=options.filter(o=>normalize(o.textContent).startsWith(value));
+    if(matches.length===1) option=matches[0];
+  }
+  if(option){sel.value=option.value;salePopupItemChanged();}
 }
 function salePopupItemChanged(){
   const sel=document.getElementById('salePopupItem'),o=sel?.options[sel.selectedIndex];if(!o)return;
@@ -6794,6 +6806,7 @@ function calculateSalePopupAmount(){
   const base=q*r,discount=base*d/100,taxable=base-discount,tax=taxable*g/100,amount=taxable+tax;const el=document.getElementById('salePopupAmount');if(el)el.textContent='₹ '+amount.toFixed(2);
 }
 function saveSalePopupItem(continueAdding){
+  const search=document.getElementById('salePopupItemSearch');if(search)salePopupItemInput(search);
   const itemId=document.getElementById('salePopupItem')?.value||'',godownId=document.getElementById('salePopupGodown')?.value||'',qty=Number(document.getElementById('salePopupQty')?.value)||0,service=isServiceSaleItem(itemId);
   if(!itemId){alert('Please select an Item.');return;} if(!service&&!godownId){alert('Please select a Godown.');return;} if(qty<=0){alert('Sale quantity must be greater than zero.');return;}
   const available=updateSalePopupAvailability();if(!service&&qty>available){const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId));alert(`Insufficient stock for ${item?.name||'item'} in selected godown. Available quantity is ${available} ${item?.unit||''}.`);return;}
