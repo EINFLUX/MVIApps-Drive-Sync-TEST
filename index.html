@@ -2361,11 +2361,14 @@ function generatePartyStatement(){
   const p=reportPeriodFilter('ps'), parties=partyReportParties(), party=parties.find(x=>String(x.id)===String(pid));
   const openingDate=String(party?.openingDate||'').trim();
   const rows=partyReportData(p.from,p.to).filter(x=>String(x.partyId)===String(pid) && (!openingDate || partyLedgerISODate(x.date)>=partyLedgerISODate(openingDate)));
-  // Match Party Ledger: opening is the balance immediately before the selected
-  // period, while a blank period uses the selected FY's Party Master opening.
-  const noManualPeriod=(!document.getElementById('psFrom')?.value && !document.getElementById('psTo')?.value);
+  // Match Party Ledger's default-FY opening rule. The report date controls
+  // may already contain the selected FY dates, so checking for blank inputs
+  // incorrectly skipped the Party Master opening when an Opening Balance Date
+  // was saved later in the FY (e.g. Devagya: Credit ₹8,00,000).
+  const fyb=getFinancialYearBounds(getActiveFinancialYear());
+  const defaultFYPeriod=(p.from===fyb.from && p.to===fyb.to && (p.month||'all')==='all');
   let bal=getPartyLedgerOpening(party,p.from);
-  if(noManualPeriod){
+  if(defaultFYPeriod){
     const base=parseMoney(party?.opening);
     bal=String(party?.balanceType||'Debit').toLowerCase()==='credit'?-Math.abs(base):Math.abs(base);
   }
