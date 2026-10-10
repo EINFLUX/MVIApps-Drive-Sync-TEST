@@ -4586,7 +4586,7 @@ function plStockValuation(from,to){
     purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)).forEach(it=>{
       if(!events.some(e=>e.type==='return'&&e.date===inv.date&&Math.abs(e.qty-(Number(it.qty)||0))<1e-9))events.push({date:inv.date||'',type:'return',qty:Number(it.qty)||0,rate:Number(it.rate||it.purchaseRate||0)});
     }));
-    sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)).forEach(it=>{
+    sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)&&!isServiceSaleItem(item)).forEach(it=>{
       if(!events.some(e=>e.type==='sale'&&e.date===inv.date&&Math.abs(e.qty-(Number(it.qty)||0))<1e-9))events.push({date:inv.date||'',type:'sale',qty:Number(it.qty)||0,rate:0});
     }));
     events.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
@@ -6711,6 +6711,10 @@ function savePurchaseInvoice(isReturn=false){ if(!ensureEntryDateInActiveFY(docu
   window._editingPurchaseId=null; window._editingPurchaseReturnId=null; alert(isReturn?(editingId?'Purchase return updated successfully.':'Purchase return saved successfully.'):(editingId?'Purchase updated successfully.':'Purchase saved successfully.')); show(isReturn?'purchase-returns':'purchase-invoices');
 }
 
+function isServiceSaleItem(itemOrId){
+  const item=(itemOrId&&typeof itemOrId==='object')?itemOrId:JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemOrId));
+  return String(item?.category||'').trim().toLowerCase()==='services';
+}
 function getSaleGodownOptions(selectedId){
   const gs=getGodowns();
   return gs.map(g=>`<option value="${escapeHtml(g.id)}" ${String(g.id)===String(selectedId||'')?'selected':''}>${escapeHtml(g.name)}</option>`).join('');
@@ -6726,7 +6730,15 @@ function addSaleInvoiceItemRow(data={}){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><div class="sale-item-picker"><div class="sale-item-picker-row"><button type="button" class="sale-item-remove" title="Remove item" aria-label="Remove item" onclick="this.closest('tr').remove();calculateSaleInvoice()">×</button><select class="sale-item" onchange="saleItemChanged(this)"><option value="">Select Item</option>${opts||'<option value="">No item added</option>'}</select></div><div class="sale-item-suggestions"></div></div></td><td><select class="sale-godown" onchange="saleGodownChanged(this)"><option value="">Select Godown</option>${getSaleGodownOptions()}</select></td><td><span class="sale-available">—</span></td><td><input class="sale-qty" type="number" min="0" step="any" value="${Number(data.qty)||1}" oninput="calculateSaleInvoice()"></td><td><input class="sale-unit" value="Nos" readonly></td><td><input class="sale-rate" type="number" min="0" step="0.01" value="${Number(data.rate)||0}" oninput="calculateSaleInvoice()"></td><td><input class="sale-discount" type="number" min="0" step="any" value="${Number(data.discount)||0}" oninput="calculateSaleInvoice()"></td><td><input class="sale-gst" type="number" min="0" step="any" value="${Number(data.gst)||0}" oninput="calculateSaleInvoice()"></td><td class="sale-amount">₹ 0.00</td>`;
   body.appendChild(tr);
-  if(data.itemId){const sel=tr.querySelector('.sale-item');sel.value=String(data.itemId);saleItemChanged(sel);}
+  if(data.itemId){
+    const sel=tr.querySelector('.sale-item');sel.value=String(data.itemId);saleItemChanged(sel);
+    // Keep the rate and adjustments entered in the Add Item popup; item selection
+    // initializes defaults, so restore the popup values after that initialization.
+    tr.querySelector('.sale-qty').value=Number(data.qty)||1;
+    tr.querySelector('.sale-rate').value=Number(data.rate)||0;
+    tr.querySelector('.sale-discount').value=Number(data.discount)||0;
+    tr.querySelector('.sale-gst').value=Number(data.gst)||0;
+  }
   if(data.godownId){const gd=tr.querySelector('.sale-godown');gd.value=String(data.godownId);saleGodownChanged(gd);}
   calculateSaleInvoice();
   return tr;
@@ -6737,7 +6749,7 @@ function openSaleAddItemPopup(){
   const items=getSortedItems();
   const itemOpts=items.map(x=>`<option value="${escapeHtml(x.id)}" data-rate="${Number(x.sale)||0}" data-unit="${escapeHtml(x.unit||'Nos')}">${escapeHtml(x.name||'Unnamed Item')}${x.code?' — '+escapeHtml(x.code):''}</option>`).join('');
   const overlay=document.createElement('div'); overlay.id='saleAddItemPopup'; overlay.className='sale-add-item-overlay';
-  overlay.innerHTML=`<div class="sale-add-item-modal" role="dialog" aria-modal="true" aria-labelledby="saleAddItemTitle"><div class="sale-add-item-modal-head"><div><h3 id="saleAddItemTitle"><span class="sale-popup-heading-icon" aria-hidden="true">🛒</span> Add Item</h3><p>Select item, godown and enter sale details.</p></div><button type="button" class="sale-popup-close" onclick="closeSaleAddItemPopup()" aria-label="Close">×</button></div><div class="sale-add-item-form">
+  overlay.innerHTML=`<div class="sale-add-item-modal" role="dialog" aria-modal="true" aria-labelledby="saleAddItemTitle"><div class="sale-add-item-modal-head"><div><h3 id="saleAddItemTitle"><span class="sale-popup-heading-icon" aria-hidden="true">🛒</span> Add Item</h3><p>Select item and enter sale details. Godown is required only for stock items.</p></div><button type="button" class="sale-popup-close" onclick="closeSaleAddItemPopup()" aria-label="Close">×</button></div><div class="sale-add-item-form">
     <div class="field sale-popup-item-field"><label>Item / Product</label><div class="sale-popup-item-wrap"><input id="salePopupItemSearch" type="text" placeholder="Type Item Name / Code or select from dropdown" list="salePopupItemList" autocomplete="off" oninput="salePopupItemInput(this)" onchange="salePopupItemInput(this)"><datalist id="salePopupItemList">${items.map(x=>`<option value="${escapeHtml(x.name||'Unnamed Item')}${x.code?' — '+escapeHtml(x.code):''}"></option>`).join('')}</datalist><select id="salePopupItem" onchange="salePopupItemChanged()"><option value="">Select Item</option>${itemOpts||'<option value="">No item added</option>'}</select></div></div>
     <div class="field"><label>Godown</label><select id="salePopupGodown" onchange="salePopupGodownChanged()"><option value="">Select Godown</option>${getSaleGodownOptions()}</select><div id="salePopupAvailable" class="sale-popup-available">Available Qty: —</div></div>
     <div class="field"><label>Sale Quantity</label><input id="salePopupQty" type="number" min="0" step="any" value="1" oninput="calculateSalePopupAmount()"></div>
@@ -6765,13 +6777,16 @@ function salePopupItemChanged(){
   const rate=document.getElementById('salePopupRate');if(rate)rate.value=o.dataset.rate||0;
   const unit=document.getElementById('salePopupUnit');if(unit)unit.value=o.dataset.unit||'Nos';
   const box=document.getElementById('salePopupItemSuggestions');if(box)box.style.display='none';
+  const gd=document.getElementById('salePopupGodown'),service=isServiceSaleItem(o.value);if(gd){if(service)gd.value='';gd.disabled=service;gd.title=service?'Godown is not required for a service':'';}
   updateSalePopupAvailability();calculateSalePopupAmount();
 }
 function salePopupGodownChanged(){updateSalePopupAvailability();}
 function updateSalePopupAvailability(){
   const itemId=document.getElementById('salePopupItem')?.value||'',godownId=document.getElementById('salePopupGodown')?.value||'',el=document.getElementById('salePopupAvailable');
+  const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId));
+  if(item&&isServiceSaleItem(item)){if(el)el.textContent='Service item — no stock';return 0;}
   if(!itemId||!godownId){if(el)el.textContent='Available Qty: —';return 0;}
-  const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId)); if(!item){if(el)el.textContent='Available Qty: —';return 0;}
+  if(!item){if(el)el.textContent='Available Qty: —';return 0;}
   const gs=getGodowns();if(gs.length)syncGodownStockWithClosing(item,gs); const q=getItemGodownQty(itemId,godownId);if(el)el.textContent=`Available Qty: ${q} ${item.unit||''}`;return q;
 }
 function calculateSalePopupAmount(){
@@ -6779,9 +6794,9 @@ function calculateSalePopupAmount(){
   const base=q*r,discount=base*d/100,taxable=base-discount,tax=taxable*g/100,amount=taxable+tax;const el=document.getElementById('salePopupAmount');if(el)el.textContent='₹ '+amount.toFixed(2);
 }
 function saveSalePopupItem(continueAdding){
-  const itemId=document.getElementById('salePopupItem')?.value||'',godownId=document.getElementById('salePopupGodown')?.value||'',qty=Number(document.getElementById('salePopupQty')?.value)||0;
-  if(!itemId){alert('Please select an Item.');return;} if(!godownId){alert('Please select a Godown.');return;} if(qty<=0){alert('Sale quantity must be greater than zero.');return;}
-  const available=updateSalePopupAvailability();if(qty>available){const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId));alert(`Insufficient stock for ${item?.name||'item'} in selected godown. Available quantity is ${available} ${item?.unit||''}.`);return;}
+  const itemId=document.getElementById('salePopupItem')?.value||'',godownId=document.getElementById('salePopupGodown')?.value||'',qty=Number(document.getElementById('salePopupQty')?.value)||0,service=isServiceSaleItem(itemId);
+  if(!itemId){alert('Please select an Item.');return;} if(!service&&!godownId){alert('Please select a Godown.');return;} if(qty<=0){alert('Sale quantity must be greater than zero.');return;}
+  const available=updateSalePopupAvailability();if(!service&&qty>available){const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId));alert(`Insufficient stock for ${item?.name||'item'} in selected godown. Available quantity is ${available} ${item?.unit||''}.`);return;}
   addSaleInvoiceItemRow({itemId,godownId,qty,rate:Number(document.getElementById('salePopupRate')?.value)||0,discount:Number(document.getElementById('salePopupDiscount')?.value)||0,gst:Number(document.getElementById('salePopupGst')?.value)||0});
   if(continueAdding){openSaleAddItemPopup();}else closeSaleAddItemPopup();
 }
@@ -6807,6 +6822,7 @@ function selectSaleItemSuggestion(el,itemId){
 }
 function saleItemChanged(sel){
   const o=sel.options[sel.selectedIndex],tr=sel.closest('tr');if(!tr)return;
+  const gd=tr.querySelector('.sale-godown'),service=isServiceSaleItem(sel.value);if(gd){if(service)gd.value='';gd.disabled=service;gd.title=service?'Godown is not required for a service':'';}
   const search=tr.querySelector('.sale-item-search');
   if(search) search.value=o?.value?o.textContent:'';
   const box=tr.querySelector('.sale-item-suggestions');
@@ -6821,6 +6837,7 @@ function updateSaleRowAvailability(tr){
   const itemId=tr.querySelector('.sale-item')?.value||'',godownId=tr.querySelector('.sale-godown')?.value||'';
   const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId));
   const el=tr.querySelector('.sale-available');
+  if(item&&isServiceSaleItem(item)){if(el)el.textContent='No stock';return 0;}
   if(!item||!godownId){if(el)el.textContent='—';return 0;}
   const gs=getGodowns(); if(gs.length)syncGodownStockWithClosing(item,gs);
   const q=getItemGodownQty(itemId,godownId); if(el)el.textContent=`${q} ${item.unit||''}`; return q;
@@ -6839,20 +6856,21 @@ function saveSaleInvoice(){ if(!ensureEntryDateInActiveFY(document.getElementByI
   const invoices=JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]'),editingId=window._editingSaleId||null,existing=editingId?invoices.find(x=>String(x.id)===String(editingId)):null;
   const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]'),party=parties.find(p=>String(p.id)===String(customer));
   const saleItems=rows.map(tr=>({itemId:tr.querySelector('.sale-item').value,godownId:tr.querySelector('.sale-godown')?.value||'',qty:Number(tr.querySelector('.sale-qty').value)||0,rate:Number(tr.querySelector('.sale-rate').value)||0,discount:Number(tr.querySelector('.sale-discount').value)||0,gst:Number(tr.querySelector('.sale-gst').value)||0}));
-  for(const it of saleItems){if(!it.itemId||!it.godownId){alert('Please select Item and Godown for every sale item.');return;}if(it.qty<=0){alert('Sale quantity must be greater than zero.');return;}}
-  const items=JSON.parse(localStorage.getItem('mviapps_items')||'[]'),gs=getGodowns();
+  const items=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
+  for(const it of saleItems){const service=isServiceSaleItem(items.find(i=>String(i.id)===String(it.itemId)));if(!it.itemId||(!service&&!it.godownId)){alert('Please select Item and Godown for every stock item.');return;}if(it.qty<=0){alert('Sale quantity must be greater than zero.');return;}}
+  const gs=getGodowns();
   const oldGodownItems=existing?.items||[];
-  oldGodownItems.forEach(it=>{if(it.godownId){const item=items.find(i=>String(i.id)===String(it.itemId));if(item)syncGodownStockWithClosing(item,gs);}});
-  saleItems.forEach(it=>{const item=items.find(i=>String(i.id)===String(it.itemId));if(item)syncGodownStockWithClosing(item,gs);});
+  oldGodownItems.forEach(it=>{if(it.godownId){const item=items.find(i=>String(i.id)===String(it.itemId));if(item&&!isServiceSaleItem(item))syncGodownStockWithClosing(item,gs);}});
+  saleItems.forEach(it=>{const item=items.find(i=>String(i.id)===String(it.itemId));if(item&&!isServiceSaleItem(item))syncGodownStockWithClosing(item,gs);});
   const temp=getGodownStock();
   // Restore stock consumed by the previous version of this invoice before validating the new version.
-  oldGodownItems.forEach(it=>{if(!it.godownId)return;let r=temp.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(it.godownId));if(!r){r={id:Date.now()+Math.random(),itemId:it.itemId,godownId:it.godownId,qty:0};temp.push(r)}r.qty=(Number(r.qty)||0)+(Number(it.qty)||0);});
-  for(const it of saleItems){const r=temp.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(it.godownId));const available=Number(r?.qty)||0;if(it.qty>available){const item=items.find(i=>String(i.id)===String(it.itemId));alert(`Insufficient stock for ${item?.name||'item'} in selected godown. Available quantity is ${available} ${item?.unit||''}.`);return;}}
-  saleItems.forEach(it=>{let r=temp.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(it.godownId));if(!r){r={id:Date.now()+Math.random(),itemId:it.itemId,godownId:it.godownId,qty:0};temp.push(r)}r.qty=(Number(r.qty)||0)-it.qty;});
+  oldGodownItems.forEach(it=>{if(!it.godownId||isServiceSaleItem(items.find(i=>String(i.id)===String(it.itemId))))return;let r=temp.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(it.godownId));if(!r){r={id:Date.now()+Math.random(),itemId:it.itemId,godownId:it.godownId,qty:0};temp.push(r)}r.qty=(Number(r.qty)||0)+(Number(it.qty)||0);});
+  for(const it of saleItems){if(isServiceSaleItem(items.find(i=>String(i.id)===String(it.itemId))))continue;const r=temp.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(it.godownId));const available=Number(r?.qty)||0;if(it.qty>available){const item=items.find(i=>String(i.id)===String(it.itemId));alert(`Insufficient stock for ${item?.name||'item'} in selected godown. Available quantity is ${available} ${item?.unit||''}.`);return;}}
+  saleItems.forEach(it=>{if(isServiceSaleItem(items.find(i=>String(i.id)===String(it.itemId))))return;let r=temp.find(x=>String(x.itemId)===String(it.itemId)&&String(x.godownId)===String(it.godownId));if(!r){r={id:Date.now()+Math.random(),itemId:it.itemId,godownId:it.godownId,qty:0};temp.push(r)}r.qty=(Number(r.qty)||0)-it.qty;});
   saveGodownStock(temp);
   const record={id:editingId||Date.now(),customer,customerName:party?.name||customer,date:document.getElementById('saleDate')?.value||'',invoiceNo,paymentMode:document.getElementById('salePaymentMode')?.value||'',bankAccount:document.getElementById('saleBankAccount')?.value||'',reference:document.getElementById('saleReference')?.value||'',dueDate:document.getElementById('saleDueDate')?.value||'',notes:document.getElementById('saleNotes')?.value||'',items:saleItems,total:document.getElementById('saleGrand')?.textContent||'₹ 0.00'};
   if(editingId){const idx=invoices.findIndex(x=>String(x.id)===String(editingId));if(idx>=0)invoices[idx]=record;else invoices.push(record);}else invoices.push(record);localStorage.setItem('mviapps_sales_invoices',JSON.stringify(invoices));
-  let moves=JSON.parse(localStorage.getItem('mviapps_stock_movements')||'[]');if(existing)moves=moves.filter(m=>!(m.type==='sale'&&String(m.ref)===String(existing.invoiceNo)));moves=moves.filter(m=>!(m.type==='sale'&&String(m.ref)===String(record.invoiceNo)));record.items.forEach(it=>moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'sale',ref:record.invoiceNo,godownId:it.godownId}));localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves));
+  let moves=JSON.parse(localStorage.getItem('mviapps_stock_movements')||'[]');if(existing)moves=moves.filter(m=>!(m.type==='sale'&&String(m.ref)===String(existing.invoiceNo)));moves=moves.filter(m=>!(m.type==='sale'&&String(m.ref)===String(record.invoiceNo)));record.items.forEach(it=>{if(!isServiceSaleItem(items.find(i=>String(i.id)===String(it.itemId))))moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'sale',ref:record.invoiceNo,godownId:it.godownId});});localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves));
   window._editingSaleId=null;alert(editingId?'Sales invoice updated successfully.':'Sales invoice saved successfully.');show('sale-invoices');
 }
 
@@ -8187,7 +8205,7 @@ function syncGodownStockWithClosing(item,gs){
   const events=[];
   purchases.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId).forEach(it=>events.push({date:inv.date||'',order:1,type:'purchase',qty:Number(it.qty)||0})));
   purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId).forEach(it=>events.push({date:inv.date||'',order:2,type:'return',qty:Number(it.qty)||0})));
-  sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId).forEach(it=>events.push({date:inv.date||'',order:4,type:'sale',qty:Number(it.qty)||0,godownId:it.godownId})));
+  sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&!isServiceSaleItem(items.find(i=>String(i.id)===itemId))).forEach(it=>events.push({date:inv.date||'',order:4,type:'sale',qty:Number(it.qty)||0,godownId:it.godownId})));
   adjustments.filter(x=>String(x.itemId)===itemId).forEach(x=>events.push({date:x.date||'',order:5,type:'adjustment',qty:Number(x.adjustmentQty||x.qty)||0,adjustmentType:x.adjustmentType,godownId:x.godownId}));
   transfers.filter(x=>String(x.itemId)===itemId).forEach(x=>events.push({date:x.date||'',order:3,type:'transfer',qty:Number(x.qty)||0,from:x.fromGodownId,to:x.toGodownId}));
   events.sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.order-b.order);
