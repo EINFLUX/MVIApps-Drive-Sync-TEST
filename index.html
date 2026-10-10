@@ -6393,11 +6393,17 @@ function printSaleInvoice(id){
     return `<tr><td>${i+1}</td><td><b>${esc(saleItemName(it.itemId))}</b></td><td class="num">${qty}</td><td>${esc(unit)}</td><td class="num">${money(rate)}</td><td class="num">${money(amount)}</td></tr>`;
   }).join('');
   const total=Number(String(x.total||'').replace(/[^0-9.-]/g,''))||items.reduce((a,it)=>a+(Number(it.qty)||0)*(Number(it.rate)||0)*(1-(Number(it.discount)||0)/100)*(1+(Number(it.gst)||0)/100),0);
-  const previousBalance=Math.abs(Number(getPartyLedgerOpening(party,x.date))||0);
+  // Keep the party-ledger sign convention: credit balances are negative,
+  // debit balances are positive. A credit sale increases the party's debit
+  // balance (or reduces an existing credit balance), matching Party Ledger.
+  const previousBalance=Number(getPartyLedgerOpening(party,x.date))||0;
   const isCredit=String(x.paymentMode||'').toLowerCase()==='credit';
-  const received=isCredit?0:total;
-  const balance=isCredit?total:0;
-  const currentBalance=previousBalance+balance;
+  const currentBalance=previousBalance+(isCredit?total:0);
+  const formatPartyBalance=value=>{
+    const amount=Math.abs(Number(value)||0);
+    const nature=Number(value)<0?'Cr':'Dr';
+    return nature+' '+money(amount);
+  };
   const address=[c.address,c.city,c.state,c.pin].filter(Boolean).join(', ');
   const contact=[c.mobile?'Phone: '+c.mobile:'',c.email?'Email: '+c.email:''].filter(Boolean).join(' &nbsp;&nbsp;&nbsp; ');
   const logo=c.logo?`<img src="${c.logo}" class="company-logo">`:'';
@@ -6410,7 +6416,7 @@ function printSaleInvoice(id){
   <div class="company-row border no-break"><div class="company">${logo}<div><div class="company-name">${esc(c.name||'Company Name')}</div>${c.trade?`<div class="trade">${esc(c.trade)}</div>`:''}${address?`<div class="small">${esc(address)}</div>`:''}${contact?`<div class="small">${contact}</div>`:''}</div></div><div class="invoice-meta">Invoice No.: &nbsp;<b>${esc(x.invoiceNo||'')}</b><br>Date: &nbsp;<b>${esc((x.date||'').split('-').reverse().join('/'))}</b></div></div>
   <div class="section border bill-to no-break"><div class="section-title">Bill To:</div><b>${esc(x.customerName||x.customer||'')}</b>${party.address?`<div>${esc(party.address)}</div>`:''}${party.mobile?`<div>Phone: ${esc(party.mobile)}</div>`:''}${party.gstin?`<div>GSTIN: ${esc(party.gstin)}</div>`:''}</div>
   <div class="section no-break"><table class="items"><thead><tr><th>#</th><th>Item Name</th><th>Quantity</th><th>Unit</th><th>Price Unit(₹)</th><th>Amount(₹)</th></tr></thead><tbody>${rows}<tr class="total-row"><td></td><td>Total</td><td class="num">${items.reduce((a,it)=>a+(Number(it.qty)||0),0)}</td><td></td><td></td><td class="num">${money(total)}</td></tr></tbody></table></div>
-  <div class="section no-break"><table class="summary"><tr><td>Sub Total</td><td>${money(subtotal)}</td></tr><tr class="grand"><td>Total</td><td>${money(total)}</td></tr><tr><td><b>Invoice Amount in Words</b></td><td>${esc(numberToWords(total))}</td></tr><tr><td>Previous Balance</td><td>${money(previousBalance)}</td></tr><tr><td>Current Balance</td><td>${money(currentBalance)}</td></tr></table></div>
+  <div class="section no-break"><table class="summary"><tr><td>Sub Total</td><td>${money(subtotal)}</td></tr><tr class="grand"><td>Total</td><td>${money(total)}</td></tr><tr><td><b>Invoice Amount in Words</b></td><td>${esc(numberToWords(total))}</td></tr><tr><td>Previous Balance</td><td>${formatPartyBalance(previousBalance)}</td></tr><tr><td>Current Balance</td><td>${formatPartyBalance(currentBalance)}</td></tr></table></div>
   <div class="section border terms no-break"><div class="section-title">Terms &amp; Conditions:</div>${esc(terms)}</div>
   <div class="section border bottom no-break"><div class="balance"></div><div class="sign"><div class="sign-title">For ${esc(c.name||'Company Name')}:</div><div class="signature-wrap">${signature}<div class="sign-label">Authorized Signatory</div></div></div></div>
   </div></body></html>`);
