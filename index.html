@@ -2389,10 +2389,28 @@ function generatePartyStatement(){
     const rec=findRecord(x)||{};
     let d=0,c=0;
     const mode=String(rec.paymentMode||'').toLowerCase();
-    if(x.type==='Sale' || x.type==='Expense') { if(mode==='credit') d=x.amount; else c=x.amount; }
-    else if(x.type==='Purchase' || x.type==='Debit Note') d=x.amount;
-    else if(x.type==='Payment-Out') c=x.amount;
-    else d=x.amount;
+    // Party balance sign convention: debit/receivable is positive;
+    // credit/payable is negative. Keep cash transactions from creating
+    // an outstanding balance, and apply payments/returns against the right side.
+    if(x.type==='Sale'){
+      if(mode==='credit') d=x.amount;
+    }else if(x.type==='Purchase'){
+      if(mode==='credit') c=x.amount;
+    }else if(x.type==='Expense'){
+      if(mode==='credit') c=x.amount;
+    }else if(x.type==='Payment-In'){
+      c=x.amount;
+    }else if(x.type==='Payment-Out'){
+      d=x.amount;
+    }else if(x.type==='Credit Note'){
+      c=x.amount;
+    }else if(x.type==='Debit Note'){
+      d=x.amount;
+    }else if(x.type==='Other Income'){
+      if(mode==='credit') d=x.amount;
+    }else{
+      d=x.amount;
+    }
     debit+=d;credit+=c;bal+=d-c;
     // Recalculate both sides from net balance after each transaction, so
     // transactions offset the opening balance consistently for every party.
