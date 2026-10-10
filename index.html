@@ -265,6 +265,14 @@
 @media(max-width:1050px){.account-layout{grid-template-columns:1fr}.account-summary{position:static}}
 @media(max-width:700px){.account-grid{grid-template-columns:1fr}.account-grid .field.full{grid-column:auto}}
 
+
+/* Purchase Invoice only: place Service Expense Head beside Add Item without changing other pages. */
+.sale-add-item-bar .purchase-service-expense-head{flex:0 1 245px;min-width:190px;margin-left:auto;margin-right:4px}
+.sale-add-item-bar .purchase-service-expense-head label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.sale-add-item-bar .purchase-service-expense-head select{width:100%;height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.sale-add-item-bar .purchase-service-expense-head small{display:block;line-height:1.25;margin-top:3px}
+@media(max-width:700px){.sale-add-item-bar .purchase-service-expense-head{flex:1 1 100%;min-width:0;margin:0}}
+
 /* Organized Sales Invoice */
 .invoice-layout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px}
 .invoice-panel{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px}
@@ -5569,7 +5577,7 @@ function purchaseInvoice(isReturn=false){
   <div class="field"><label>${isReturn?'Return':'Bill'} No. *</label><input id="purchaseInvoiceNo" value="${isReturn?'':getNextAutoNumber('mviapps_purchase_invoices','PUR')}" placeholder="${isReturn?'Enter return number':'Auto-generated'}" ${isReturn?'':'readonly'}></div>
   <div class="field"><label>Payment Mode</label><select id="purchasePaymentMode" onchange="mviappsToggleBankAccount('purchasePaymentMode','purchaseBankWrap','purchaseBankAccount')"><option>Cash</option><option>Bank</option><option>UPI</option><option>Credit</option><option>Other</option></select></div><div class="field" id="purchaseBankWrap" style="display:none"><label>Bank Account</label><select id="purchaseBankAccount"><option value="">Select Bank Account</option>${mviappsBankAccountOptions()}</select></div>
   <div class="field"><label>Reference No.</label><input id="purchaseReference" placeholder="Enter reference number"></div><div class="field"><label>Due Date</label><div class="payment-in-date-wrap"><input id="purchaseDueDateDisplay" type="text" value="" aria-label="Due Date (DD/MM/YYYY)" placeholder="  /  /    " maxlength="10" inputmode="numeric" autocomplete="off" onfocus="preparePurchaseInvoiceDueDateManual()" oninput="formatPurchaseInvoiceDueDateInput(this)" onblur="syncPurchaseInvoiceDueDateManual()"><button type="button" class="payment-in-calendar-btn" aria-label="Open purchase due date calendar" title="Select due date" onclick="openPurchaseInvoiceDueDatePicker()">&#128197;</button><input id="purchaseDueDate" type="date" value="" onchange="syncPurchaseInvoiceDueDateDisplay()" aria-label="Select due date"></div></div></div></div>
-  <div class="invoice-panel invoice-section"><h3>Items</h3><div class="table-wrap invoice-table"><table class="table"><thead><tr><th style="min-width:220px">Item</th><th>Qty</th><th>Unit</th><th>Purchase Rate</th><th>Discount %</th><th>GST %</th><th>Amount</th><th></th></tr></thead><tbody id="purchaseInvoiceItems"><tr><td colspan="8" class="empty">No items added. “+ Add Item” button se item add karein.</td></tr></tbody></table></div><div class="sale-add-item-bar"><span class="sale-add-item-help">Add item details in a separate popup.</span><button class="btn" onclick="addPurchaseInvoiceItem()">＋ Add Item</button></div></div>
+  <div class="invoice-panel invoice-section"><h3>Items</h3><div class="table-wrap invoice-table"><table class="table"><thead><tr><th style="min-width:220px">Item</th><th>Qty</th><th>Unit</th><th>Purchase Rate</th><th>Discount %</th><th>GST %</th><th>Amount</th><th></th></tr></thead><tbody id="purchaseInvoiceItems"><tr><td colspan="8" class="empty">No items added. “+ Add Item” button se item add karein.</td></tr></tbody></table></div><div class="sale-add-item-bar"><span class="sale-add-item-help">Add item details in a separate popup.</span>${!isReturn?`<div class="field purchase-service-expense-head"><label for="purchaseServiceExpenseHead">Service Expense Head</label><select id="purchaseServiceExpenseHead">${[...new Set([...getExpenseCategories(),'Courier/Postage'])].map(c=>`<option value="${escapeHtml(c)}" ${String(c).toLowerCase()==='office expenses'?'selected':''}>${escapeHtml(c)}</option>`).join('')}</select><small style="color:var(--muted);font-size:11px">Used for Service Item(s) automatically recorded as Expenses.</small></div>`:''}<button class="btn" onclick="addPurchaseInvoiceItem()">＋ Add Item</button></div></div>
   <div class="invoice-panel invoice-section"><h3>Notes & Terms</h3><div class="invoice-grid"><div class="field full"><label>Notes</label><textarea id="purchaseNotes" placeholder="Enter notes or supplier details"></textarea></div></div></div></div>
   <div class="invoice-panel invoice-summary"><h3>Purchase Summary</h3>${['Sub Total','Discount','Taxable Amount','CGST','SGST','IGST','Round Off'].map(x=>`<div class="invoice-total"><span>${x}</span><b id="purchase${x.replace(/ /g,'')}">₹ 0.00</b></div>`).join('')}<div class="invoice-total invoice-grand"><span>Grand Total</span><b id="purchaseGrand">₹ 0.00</b></div></div></div>${isReturn?`<div class="panel" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><h3 style="margin:0">Purchase Return Entries</h3><p style="margin:4px 0;color:var(--muted)">Current month entries are shown by default. Select From Date and To Date to view older entries.</p></div><div class="payment-in-list-date-group"><div class="payment-in-list-date-wrap"><span class="payment-in-list-date-label">From Date</span><input class="input" id="purchaseReturnFromDisplay" type="text" value="${purchaseReturnFirstMonthDisplay}" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="preparePurchaseReturnListManualDate('from')" oninput="formatPurchaseReturnListDateInput(this)" onblur="syncPurchaseReturnListManualDate('from')"><button type="button" class="payment-in-list-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openPurchaseReturnListDatePicker('from')">&#128197;</button><input id="purchaseReturnFrom" type="date" value="${purchaseReturnFirstMonthDate}" onchange="syncPurchaseReturnListDateDisplay('from');renderPurchaseReturns()" aria-label="Select from date"></div><div class="payment-in-list-date-wrap"><span class="payment-in-list-date-label">To Date</span><input class="input" id="purchaseReturnToDisplay" type="text" value="${purchaseReturnLastMonthDisplay}" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="preparePurchaseReturnListManualDate('to')" oninput="formatPurchaseReturnListDateInput(this)" onblur="syncPurchaseReturnListManualDate('to')"><button type="button" class="payment-in-list-calendar-btn" aria-label="Open To Date calendar" title="Select date" onclick="openPurchaseReturnListDatePicker('to')">&#128197;</button><input id="purchaseReturnTo" type="date" value="${purchaseReturnLastMonthDate}" onchange="syncPurchaseReturnListDateDisplay('to');renderPurchaseReturns()" aria-label="Select to date"></div></div></div><div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>Date</th><th>Return No.</th><th>Supplier</th><th>Items</th><th>Payment Mode</th><th>Total</th><th>Action</th></tr></thead><tbody id="purchaseReturnRows"></tbody></table></div></div>`:''}`;
 }
@@ -6576,6 +6584,8 @@ function editPurchaseInvoice(id){
     if(reference)reference.value=x.reference||'';
     if(dueDate){dueDate.value=x.dueDate||'';syncPurchaseInvoiceDueDateDisplay();}
     if(notes)notes.value=x.notes||'';
+    const serviceHead=document.getElementById('purchaseServiceExpenseHead');
+    if(serviceHead){const existingExpense=JSON.parse(localStorage.getItem('mviapps_expenses')||'[]').find(e=>e.sourcePurchaseInvoice===true&&String(e.sourcePurchaseInvoiceId||'')===String(x.id));if(existingExpense&&![...serviceHead.options].some(o=>o.value===existingExpense.category))serviceHead.add(new Option(existingExpense.category,existingExpense.category));if(existingExpense)serviceHead.value=existingExpense.category;}
     const body=document.getElementById('purchaseInvoiceItems');
     if(body){
       body.innerHTML='';
@@ -6587,8 +6597,7 @@ function editPurchaseInvoice(id){
   },0);
 }
 function addPurchaseInvoiceItemWithData(it){addPurchaseInvoiceItemRow({itemId:it.itemId,qty:it.qty??1,rate:it.rate??0,discount:it.discount??0,gst:it.gst??0});}
-function deletePurchaseInvoice(id){if(!confirm('Delete this purchase invoice?'))return;const arr=JSON.parse(localStorage.getItem('mviapps_purchase_invoices')||'[]');const x=arr.find(v=>String(v.id)===String(id));localStorage.setItem('mviapps_purchase_invoices',JSON.stringify(arr.filter(v=>String(v.id)!==String(id))));if(x){const moves=JSON.parse(localStorage.getItem('mviapps_stock_movements')||'[]');localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves.filter(m=>!(m.type==='purchase'&&String(m.ref)===String(x.invoiceNo)))));}renderPurchaseInvoices();}
-
+function deletePurchaseInvoice(id){if(!confirm('Delete this purchase invoice?'))return;const arr=JSON.parse(localStorage.getItem('mviapps_purchase_invoices')||'[]');const x=arr.find(v=>String(v.id)===String(id));localStorage.setItem('mviapps_purchase_invoices',JSON.stringify(arr.filter(v=>String(v.id)!==String(id))));if(x){const moves=JSON.parse(localStorage.getItem('mviapps_stock_movements')||'[]');localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves.filter(m=>!(m.type==='purchase'&&String(m.ref)===String(x.invoiceNo)))));const expenses=JSON.parse(localStorage.getItem('mviapps_expenses')||'[]');localStorage.setItem('mviapps_expenses',JSON.stringify(expenses.filter(e=>!(e.sourcePurchaseInvoice===true&&String(e.sourcePurchaseInvoiceId)===String(x.id)))));}renderPurchaseInvoices();}
 function getPurchaseReturn(id){return JSON.parse(localStorage.getItem('mviapps_purchase_returns')||'[]').find(x=>String(x.id)===String(id));}
 function openPurchaseReturnListDatePicker(which){
   const picker=document.getElementById(which==='from'?'purchaseReturnFrom':'purchaseReturnTo');
@@ -6710,26 +6719,63 @@ function savePurchaseInvoice(isReturn=false){ if(!ensureEntryDateInActiveFY(docu
   const key=isReturn?'mviapps_purchase_returns':'mviapps_purchase_invoices',arr=JSON.parse(localStorage.getItem(key)||'[]');
   const editingId=isReturn?window._editingPurchaseReturnId:window._editingPurchaseId; const existing=editingId?arr.find(x=>String(x.id)===String(editingId)):null;
   const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]'); const party=parties.find(p=>String(p.id)===String(supplier));
+  const date=document.getElementById('purchaseDate')?.value||'',paymentMode=document.getElementById('purchasePaymentMode')?.value||'',bankAccount=document.getElementById('purchaseBankAccount')?.value||'',reference=document.getElementById('purchaseReference')?.value||'',dueDate=document.getElementById('purchaseDueDate')?.value||'',notes=document.getElementById('purchaseNotes')?.value||'';
+  const allItems=rows.map(tr=>({itemId:tr.querySelector('.purchase-item').value,qty:Number(tr.querySelector('.purchase-qty').value)||0,rate:Number(tr.querySelector('.purchase-rate').value)||0,discount:Number(tr.querySelector('.purchase-discount').value)||0,gst:Number(tr.querySelector('.purchase-gst').value)||0}));
+  if(allItems.some(it=>!it.itemId)){alert('Please select an item in every row or remove the empty row.');return;}
+  const itemMaster=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
+  const isService=it=>!isReturn&&isServiceSaleItem(itemMaster.find(i=>String(i.id)===String(it.itemId)));
+  const goodsItems=allItems.filter(it=>!isService(it)),serviceItems=allItems.filter(isService);
+  const calcTotal=items=>{let total=0;items.forEach(it=>{const base=(Number(it.qty)||0)*(Number(it.rate)||0),taxable=base-base*(Number(it.discount)||0)/100;total+=taxable+taxable*(Number(it.gst)||0)/100;});return Math.round(total).toFixed(2);};
   const totalText=document.getElementById('purchaseGrand')?.textContent||'₹ 0.00';
-  const record={id:editingId||Date.now(),supplier,supplierName:party?.name||supplier,date:document.getElementById('purchaseDate')?.value||'',invoiceNo:no,paymentMode:document.getElementById('purchasePaymentMode')?.value||'',bankAccount:document.getElementById('purchaseBankAccount')?.value||'',reference:document.getElementById('purchaseReference')?.value||'',dueDate:document.getElementById('purchaseDueDate')?.value||'',notes:document.getElementById('purchaseNotes')?.value||'',items:rows.map(tr=>({itemId:tr.querySelector('.purchase-item').value,qty:Number(tr.querySelector('.purchase-qty').value)||0,rate:Number(tr.querySelector('.purchase-rate').value)||0,discount:Number(tr.querySelector('.purchase-discount').value)||0,gst:Number(tr.querySelector('.purchase-gst').value)||0})),total:totalText};
-  if(editingId){const idx=arr.findIndex(x=>String(x.id)===String(editingId));if(idx>=0)arr[idx]=record;else arr.push(record);}else arr.push(record); localStorage.setItem(key,JSON.stringify(arr));
+  const baseRecord={id:editingId||Date.now(),supplier,supplierName:party?.name||supplier,date,invoiceNo:no,paymentMode,bankAccount,reference,dueDate,notes};
+  // Service rows are recorded as Expenses against the same supplier bill. Only stock goods remain in Purchase.
+  if(!isReturn){
+    let expenses=JSON.parse(localStorage.getItem('mviapps_expenses')||'[]');
+    const oldAuto=expenses.filter(x=>x.sourcePurchaseInvoiceId!=null&&String(x.sourcePurchaseInvoiceId)===String(editingId||''));
+    // Also recognize the bill-number link so updates remain safe if the original Purchase was service-only.
+    const related=expenses.filter(x=>x.sourcePurchaseInvoice===true&&String(x.supplierInvoiceNo||'')===String(existing?.invoiceNo||no)&&String(x.partyId||'')===String(supplier));
+    // When editing a goods-only Purchase record, its previously auto-created service expense is not in the item grid; preserve it unless service rows are explicitly present to replace it.
+    if(serviceItems.length){
+      const removeIds=new Set([...oldAuto,...related].map(x=>String(x.id)));
+      expenses=expenses.filter(x=>!removeIds.has(String(x.id)));
+    }
+    if(serviceItems.length){
+      const serviceAmount=Number(calcTotal(serviceItems));
+      const category=(document.getElementById('purchaseServiceExpenseHead')?.value||oldAuto[0]?.category||related[0]?.category||'Office Expenses').trim();
+      const serviceLines=serviceItems.map(it=>{const item=itemMaster.find(i=>String(i.id)===String(it.itemId));return `${item?.name||'Service'} × ${it.qty} @ ₹${Number(it.rate||0).toFixed(2)} (Discount ${Number(it.discount)||0}%, GST ${Number(it.gst)||0}%)`;}).join('\n');
+      const expenseNo=oldAuto[0]?.number||related[0]?.number||getNextAutoNumber('mviapps_expenses','EXP');
+      expenses.push({id:oldAuto[0]?.id||related[0]?.id||Date.now()+Math.random(),number:expenseNo,date,category,entryType:'party',partyId:supplier,partyName:party?.name||supplier,amount:serviceAmount,paymentMode,account:bankAccount,bankAccount,reference:no,notes:`Supplier Bill No.: ${no}${reference?' | Reference: '+reference:''}${dueDate?' | Due Date: '+dueDate:''}\nAutomatically recorded from Purchase Service Item(s):\n${serviceLines}${notes?'\nNotes: '+notes:''}`,supplierInvoiceNo:no,dueDate,sourcePurchaseInvoice:true,sourcePurchaseInvoiceId:editingId||baseRecord.id});
+    }
+    localStorage.setItem('mviapps_expenses',JSON.stringify(expenses));
+    const goodsIndex=arr.findIndex(x=>String(x.id)===String(editingId));
+    if(goodsItems.length){
+      const record={...baseRecord,items:goodsItems,total:'₹ '+calcTotal(goodsItems)};
+      if(goodsIndex>=0)arr[goodsIndex]=record;else arr.push(record);
+    }else if(goodsIndex>=0){arr.splice(goodsIndex,1);}
+    localStorage.setItem(key,JSON.stringify(arr));
+  }else{
+    const record={...baseRecord,items:allItems,total:totalText};
+    if(editingId){const idx=arr.findIndex(x=>String(x.id)===String(editingId));if(idx>=0)arr[idx]=record;else arr.push(record);}else arr.push(record);
+    localStorage.setItem(key,JSON.stringify(arr));
+  }
   syncPurchaseInvoiceStockMovements();
   let moves=JSON.parse(localStorage.getItem('mviapps_stock_movements')||'[]');
   if(isReturn){
     if(existing)moves=moves.filter(m=>!(m.type==='return'&&String(m.ref)===String(existing.invoiceNo)));
-    moves=moves.filter(m=>!(m.type==='return'&&String(m.ref)===String(record.invoiceNo)));
-    record.items.forEach(it=>{if(!isServiceSaleItem(it.itemId))moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'return',ref:record.invoiceNo,rate:Number(it.rate)||0});});
+    moves=moves.filter(m=>!(m.type==='return'&&String(m.ref)===String(no)));
+    allItems.forEach(it=>{if(!isServiceSaleItem(it.itemId))moves.push({id:Date.now()+Math.random(),date,itemId:it.itemId,qty:it.qty,type:'return',ref:no,rate:Number(it.rate)||0});});
   }else{
     if(existing)moves=moves.filter(m=>!(m.type==='purchase'&&String(m.ref)===String(existing.invoiceNo)));
-    moves=moves.filter(m=>!(m.type==='purchase'&&String(m.ref)===String(record.invoiceNo)));
-    record.items.forEach(it=>{if(!isServiceSaleItem(it.itemId))moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'purchase',ref:record.invoiceNo,rate:Number(it.rate)||0});});
+    moves=moves.filter(m=>!(m.type==='purchase'&&String(m.ref)===String(no)));
+    goodsItems.forEach(it=>moves.push({id:Date.now()+Math.random(),date,itemId:it.itemId,qty:it.qty,type:'purchase',ref:no,rate:Number(it.rate)||0}));
   }
   localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves));
-  // Recalculate current stock immediately after purchase/return so quantity and value reflect the transaction.
   const refreshedItems=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
   refreshedItems.forEach(it=>{const st=getCurrentStockSnapshot(it);it.currentQty=st.qty;it.currentValue=st.value;});
   localStorage.setItem('mviapps_items',JSON.stringify(refreshedItems));
-  window._editingPurchaseId=null; window._editingPurchaseReturnId=null; alert(isReturn?(editingId?'Purchase return updated successfully.':'Purchase return saved successfully.'):(editingId?'Purchase updated successfully.':'Purchase saved successfully.')); show(isReturn?'purchase-returns':'purchase-invoices');
+  window._editingPurchaseId=null; window._editingPurchaseReturnId=null;
+  const msg=isReturn?(editingId?'Purchase return updated successfully.':'Purchase return saved successfully.'):(goodsItems.length?(editingId?'Purchase updated; service items were updated in Expenses.':'Purchase saved; service items were automatically recorded in Expenses.'):(serviceItems.length?'Service item(s) recorded in Expenses; no Purchase entry was created.':'Purchase saved successfully.'));
+  alert(msg); show(isReturn?'purchase-returns':(goodsItems.length||isReturn?'purchase-invoices':'expenses'));
 }
 
 function isServiceSaleItem(itemOrId){
