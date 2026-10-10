@@ -2469,7 +2469,7 @@ function printPartyStatement(){
       itemHTML=`<table class="ps-item-table"><thead><tr>${[0,1,2,3,4,5].map(i=>`<th class="${i===2||i===4||i===5?'num':''}">${cellHTML(head,i)}</th>`).join('')}</tr></thead><tbody>`;
       itemHTML+=t.items.map(r=>`<tr>${[0,1,2,3,4,5].map(i=>`<td class="${i===2||i===4||i===5?'num':''}">${cellHTML(r,i)}</td>`).join('')}</tr>`).join('');
       if(t.subtotal){
-        itemHTML+=`<tr class="ps-subtotal-row"><td colspan="5">${cellHTML(t.subtotal,0)}</td><td class="num">${cellHTML(t.subtotal,5)}</td></tr>`;
+        itemHTML+=`<tr class="ps-subtotal-row"><td colspan="5">${cellHTML(t.subtotal,0)}</td><td class="num">${cellHTML(t.subtotal,1)}</td></tr>`;
       }
       itemHTML+='</tbody></table>';
     }
@@ -2508,8 +2508,9 @@ function printPartyStatement(){
     .ps-item-table th{background:#d9d9d9;border-top:1px solid #777;border-bottom:1px solid #555;font-weight:800;line-height:1.15}
     .ps-item-table th:nth-child(1){width:6%}.ps-item-table th:nth-child(2){width:46%}.ps-item-table th:nth-child(3){width:11%}.ps-item-table th:nth-child(4){width:10%}.ps-item-table th:nth-child(5){width:13%}.ps-item-table th:nth-child(6){width:14%}
     .ps-item-table tr{break-inside:avoid;page-break-inside:avoid}
-    .ps-subtotal-row td{border-top:1px solid #777;font-weight:700}
-    .ps-subtotal-row td:first-child{text-align:right;padding-right:6px}
+    .ps-subtotal-row td{border-top:1px solid #777;font-weight:700;padding-top:6px;padding-bottom:6px;line-height:1.35;vertical-align:middle}
+    .ps-subtotal-row td:first-child{text-align:right;padding-right:10px;white-space:normal}
+    .ps-subtotal-row td:last-child{text-align:right;white-space:nowrap;min-width:0}
     .ps-detail-line{font-size:7.7px;font-weight:600;padding:3px 3px 2px;overflow-wrap:anywhere}
     .ps-period{text-align:center;margin-top:6px;color:#555;font-size:7px}
     @media print{
