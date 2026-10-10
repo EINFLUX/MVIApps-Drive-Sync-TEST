@@ -4580,10 +4580,10 @@ function plStockValuation(from,to){
     const events=[];
     movements.filter(m=>String(m.itemId)===String(item.id)).forEach(m=>events.push({date:m.date||'',type:m.type,qty:Number(m.qty)||0,rate:movementRate(m),adj:m.adjustmentType}));
     // Rebuild invoice-based purchase/return events when older stock movements do not carry rates.
-    purchases.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)).forEach(it=>{
+    purchases.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)&&!isServiceSaleItem(item)).forEach(it=>{
       if(!events.some(e=>e.type==='purchase'&&e.date===inv.date&&Math.abs(e.qty-(Number(it.qty)||0))<1e-9))events.push({date:inv.date||'',type:'purchase',qty:Number(it.qty)||0,rate:Number(it.rate||it.purchaseRate||0)});
     }));
-    purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)).forEach(it=>{
+    purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)&&!isServiceSaleItem(item)).forEach(it=>{
       if(!events.some(e=>e.type==='return'&&e.date===inv.date&&Math.abs(e.qty-(Number(it.qty)||0))<1e-9))events.push({date:inv.date||'',type:'return',qty:Number(it.qty)||0,rate:Number(it.rate||it.purchaseRate||0)});
     }));
     sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===String(item.id)&&!isServiceSaleItem(item)).forEach(it=>{
@@ -6393,17 +6393,11 @@ function printSaleInvoice(id){
     return `<tr><td>${i+1}</td><td><b>${esc(saleItemName(it.itemId))}</b></td><td class="num">${qty}</td><td>${esc(unit)}</td><td class="num">${money(rate)}</td><td class="num">${money(amount)}</td></tr>`;
   }).join('');
   const total=Number(String(x.total||'').replace(/[^0-9.-]/g,''))||items.reduce((a,it)=>a+(Number(it.qty)||0)*(Number(it.rate)||0)*(1-(Number(it.discount)||0)/100)*(1+(Number(it.gst)||0)/100),0);
-  // Keep the party-ledger sign convention: credit balances are negative,
-  // debit balances are positive. A credit sale increases the party's debit
-  // balance (or reduces an existing credit balance), matching Party Ledger.
-  const previousBalance=Number(getPartyLedgerOpening(party,x.date))||0;
+  const previousBalance=Math.abs(Number(getPartyLedgerOpening(party,x.date))||0);
   const isCredit=String(x.paymentMode||'').toLowerCase()==='credit';
-  const currentBalance=previousBalance+(isCredit?total:0);
-  const formatPartyBalance=value=>{
-    const amount=Math.abs(Number(value)||0);
-    const nature=Number(value)<0?'Cr':'Dr';
-    return nature+' '+money(amount);
-  };
+  const received=isCredit?0:total;
+  const balance=isCredit?total:0;
+  const currentBalance=previousBalance+balance;
   const address=[c.address,c.city,c.state,c.pin].filter(Boolean).join(', ');
   const contact=[c.mobile?'Phone: '+c.mobile:'',c.email?'Email: '+c.email:''].filter(Boolean).join(' &nbsp;&nbsp;&nbsp; ');
   const logo=c.logo?`<img src="${c.logo}" class="company-logo">`:'';
@@ -6416,7 +6410,7 @@ function printSaleInvoice(id){
   <div class="company-row border no-break"><div class="company">${logo}<div><div class="company-name">${esc(c.name||'Company Name')}</div>${c.trade?`<div class="trade">${esc(c.trade)}</div>`:''}${address?`<div class="small">${esc(address)}</div>`:''}${contact?`<div class="small">${contact}</div>`:''}</div></div><div class="invoice-meta">Invoice No.: &nbsp;<b>${esc(x.invoiceNo||'')}</b><br>Date: &nbsp;<b>${esc((x.date||'').split('-').reverse().join('/'))}</b></div></div>
   <div class="section border bill-to no-break"><div class="section-title">Bill To:</div><b>${esc(x.customerName||x.customer||'')}</b>${party.address?`<div>${esc(party.address)}</div>`:''}${party.mobile?`<div>Phone: ${esc(party.mobile)}</div>`:''}${party.gstin?`<div>GSTIN: ${esc(party.gstin)}</div>`:''}</div>
   <div class="section no-break"><table class="items"><thead><tr><th>#</th><th>Item Name</th><th>Quantity</th><th>Unit</th><th>Price Unit(₹)</th><th>Amount(₹)</th></tr></thead><tbody>${rows}<tr class="total-row"><td></td><td>Total</td><td class="num">${items.reduce((a,it)=>a+(Number(it.qty)||0),0)}</td><td></td><td></td><td class="num">${money(total)}</td></tr></tbody></table></div>
-  <div class="section no-break"><table class="summary"><tr><td>Sub Total</td><td>${money(subtotal)}</td></tr><tr class="grand"><td>Total</td><td>${money(total)}</td></tr><tr><td><b>Invoice Amount in Words</b></td><td>${esc(numberToWords(total))}</td></tr><tr><td>Previous Balance</td><td>${formatPartyBalance(previousBalance)}</td></tr><tr><td>Current Balance</td><td>${formatPartyBalance(currentBalance)}</td></tr></table></div>
+  <div class="section no-break"><table class="summary"><tr><td>Sub Total</td><td>${money(subtotal)}</td></tr><tr class="grand"><td>Total</td><td>${money(total)}</td></tr><tr><td><b>Invoice Amount in Words</b></td><td>${esc(numberToWords(total))}</td></tr><tr><td>Previous Balance</td><td>${money(previousBalance)}</td></tr><tr><td>Current Balance</td><td>${money(currentBalance)}</td></tr></table></div>
   <div class="section border terms no-break"><div class="section-title">Terms &amp; Conditions:</div>${esc(terms)}</div>
   <div class="section border bottom no-break"><div class="balance"></div><div class="sign"><div class="sign-title">For ${esc(c.name||'Company Name')}:</div><div class="signature-wrap">${signature}<div class="sign-label">Authorized Signatory</div></div></div></div>
   </div></body></html>`);
@@ -6681,10 +6675,10 @@ function syncPurchaseInvoiceStockMovements(){
     const exists=moves.some(m=>m.type===type&&String(m.ref)===String(ref)&&String(m.itemId)===String(itemId));
     if(!exists){moves.push({id:Date.now()+Math.random(),date:date||'',itemId,qty:Number(qty)||0,type,ref,rate:Number(rate)||0});changed=true;}
   };
-  invoices.forEach(inv=>(inv.items||[]).forEach(it=>ensureMove(inv.date,it.itemId,it.qty,'purchase',inv.invoiceNo,it.rate)));
-  returns.forEach(inv=>(inv.items||[]).forEach(it=>ensureMove(inv.date,it.itemId,it.qty,'return',inv.invoiceNo,it.rate)));
-  invoices.forEach(inv=>(inv.items||[]).forEach(it=>moves.forEach(m=>{if(m.type==='purchase'&&String(m.ref)===String(inv.invoiceNo)&&String(m.itemId)===String(it.itemId)&&!(Number(m.rate)>0)&&Number(it.rate)>0){m.rate=Number(it.rate);changed=true;}})));
-  returns.forEach(inv=>(inv.items||[]).forEach(it=>moves.forEach(m=>{if(m.type==='return'&&String(m.ref)===String(inv.invoiceNo)&&String(m.itemId)===String(it.itemId)&&!(Number(m.rate)>0)&&Number(it.rate)>0){m.rate=Number(it.rate);changed=true;}})));
+  invoices.forEach(inv=>(inv.items||[]).forEach(it=>{if(!isServiceSaleItem(it.itemId))ensureMove(inv.date,it.itemId,it.qty,'purchase',inv.invoiceNo,it.rate);}));
+  returns.forEach(inv=>(inv.items||[]).forEach(it=>{if(!isServiceSaleItem(it.itemId))ensureMove(inv.date,it.itemId,it.qty,'return',inv.invoiceNo,it.rate);}));
+  invoices.forEach(inv=>(inv.items||[]).filter(it=>!isServiceSaleItem(it.itemId)).forEach(it=>moves.forEach(m=>{if(m.type==='purchase'&&String(m.ref)===String(inv.invoiceNo)&&String(m.itemId)===String(it.itemId)&&!(Number(m.rate)>0)&&Number(it.rate)>0){m.rate=Number(it.rate);changed=true;}})));
+  returns.forEach(inv=>(inv.items||[]).filter(it=>!isServiceSaleItem(it.itemId)).forEach(it=>moves.forEach(m=>{if(m.type==='return'&&String(m.ref)===String(inv.invoiceNo)&&String(m.itemId)===String(it.itemId)&&!(Number(m.rate)>0)&&Number(it.rate)>0){m.rate=Number(it.rate);changed=true;}})));
   if(changed)localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves));
   return moves;
 }
@@ -6703,11 +6697,11 @@ function savePurchaseInvoice(isReturn=false){ if(!ensureEntryDateInActiveFY(docu
   if(isReturn){
     if(existing)moves=moves.filter(m=>!(m.type==='return'&&String(m.ref)===String(existing.invoiceNo)));
     moves=moves.filter(m=>!(m.type==='return'&&String(m.ref)===String(record.invoiceNo)));
-    record.items.forEach(it=>moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'return',ref:record.invoiceNo,rate:Number(it.rate)||0}));
+    record.items.forEach(it=>{if(!isServiceSaleItem(it.itemId))moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'return',ref:record.invoiceNo,rate:Number(it.rate)||0});});
   }else{
     if(existing)moves=moves.filter(m=>!(m.type==='purchase'&&String(m.ref)===String(existing.invoiceNo)));
     moves=moves.filter(m=>!(m.type==='purchase'&&String(m.ref)===String(record.invoiceNo)));
-    record.items.forEach(it=>moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'purchase',ref:record.invoiceNo,rate:Number(it.rate)||0}));
+    record.items.forEach(it=>{if(!isServiceSaleItem(it.itemId))moves.push({id:Date.now()+Math.random(),date:record.date,itemId:it.itemId,qty:it.qty,type:'purchase',ref:record.invoiceNo,rate:Number(it.rate)||0});});
   }
   localStorage.setItem('mviapps_stock_movements',JSON.stringify(moves));
   // Recalculate current stock immediately after purchase/return so quantity and value reflect the transaction.
@@ -8209,8 +8203,8 @@ function syncGodownStockWithClosing(item,gs){
   const transfers=JSON.parse(localStorage.getItem('mviapps_godown_transfers')||'[]');
   const bounds=getFinancialYearBounds(),fyFrom=bounds.from||'',fyTo=bounds.to||'';
   const events=[];
-  purchases.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId).forEach(it=>events.push({date:inv.date||'',order:1,type:'purchase',qty:Number(it.qty)||0})));
-  purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId).forEach(it=>events.push({date:inv.date||'',order:2,type:'return',qty:Number(it.qty)||0})));
+  purchases.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&!isServiceSaleItem(items.find(i=>String(i.id)===itemId))).forEach(it=>events.push({date:inv.date||'',order:1,type:'purchase',qty:Number(it.qty)||0})));
+  purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&!isServiceSaleItem(items.find(i=>String(i.id)===itemId))).forEach(it=>events.push({date:inv.date||'',order:2,type:'return',qty:Number(it.qty)||0})));
   sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&!isServiceSaleItem(items.find(i=>String(i.id)===itemId))).forEach(it=>events.push({date:inv.date||'',order:4,type:'sale',qty:Number(it.qty)||0,godownId:it.godownId})));
   adjustments.filter(x=>String(x.itemId)===itemId).forEach(x=>events.push({date:x.date||'',order:5,type:'adjustment',qty:Number(x.adjustmentQty||x.qty)||0,adjustmentType:x.adjustmentType,godownId:x.godownId}));
   transfers.filter(x=>String(x.itemId)===itemId).forEach(x=>events.push({date:x.date||'',order:3,type:'transfer',qty:Number(x.qty)||0,from:x.fromGodownId,to:x.toGodownId}));
