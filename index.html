@@ -2452,7 +2452,7 @@ function printPartyStatement(){
       itemHTML=`<table class="ps-item-table"><thead><tr>${[0,1,2,3,4,5].map(i=>`<th class="${i===2||i===4||i===5?'num':''}">${cellHTML(head,i)}</th>`).join('')}</tr></thead><tbody>`;
       itemHTML+=t.items.map(r=>`<tr>${[0,1,2,3,4,5].map(i=>`<td class="${i===2||i===4||i===5?'num':''}">${cellHTML(r,i)}</td>`).join('')}</tr>`).join('');
       if(t.subtotal){
-        itemHTML+=`<tr class="ps-subtotal-row"><td colspan="5">${cellHTML(t.subtotal,0)}</td><td class="num">${cellHTML(t.subtotal,5)}</td></tr>`;
+        itemHTML+=`<tr class="ps-subtotal-row"><td colspan="5">${cellHTML(t.subtotal,0)}</td><td class="num">${cellHTML(t.subtotal,1)}</td></tr>`;
       }
       itemHTML+='</tbody></table>';
     }
