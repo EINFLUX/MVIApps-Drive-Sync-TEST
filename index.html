@@ -2369,8 +2369,10 @@ function generatePartyStatement(){
     const base=parseMoney(party?.opening);
     bal=String(party?.balanceType||'Debit').toLowerCase()==='credit'?-Math.abs(base):Math.abs(base);
   }
-  let receivable=String(party?.balanceType||'Debit').toLowerCase()==='credit'?0:Math.abs(Number(party?.opening)||0);
-  let payable=String(party?.balanceType||'Debit').toLowerCase()==='credit'?Math.abs(Number(party?.opening)||0):0;
+  // Receivable/Payable columns are derived from the same net running balance
+  // used by Party Ledger: positive = debit/receivable, negative = credit/payable.
+  let receivable=Math.max(0,bal);
+  let payable=Math.max(0,-bal);
   let debit=0,credit=0,html='';
   const allByKey=(key)=>JSON.parse(localStorage.getItem(key)||'[]');
   const findRecord=(x)=>x.record||(
@@ -2392,17 +2394,14 @@ function generatePartyStatement(){
     else if(x.type==='Payment-Out') c=x.amount;
     else d=x.amount;
     debit+=d;credit+=c;bal+=d-c;
-    if(x.type==='Sale' && mode==='credit') receivable+=x.amount;
-    else if(x.type==='Payment-In') receivable=Math.max(0,receivable-x.amount);
-    else if(x.type==='Credit Note') receivable=Math.max(0,receivable-x.amount);
-    else if(x.type==='Purchase') payable+=x.amount;
-    else if(x.type==='Expense' && mode==='credit') payable+=x.amount;
-    else if(x.type==='Payment-Out') payable=Math.max(0,payable-x.amount);
-    else if(x.type==='Debit Note') payable=Math.max(0,payable-x.amount);
+    // Recalculate both sides from net balance after each transaction, so
+    // transactions offset the opening balance consistently for every party.
+    receivable=Math.max(0,bal);
+    payable=Math.max(0,-bal);
     const status=(x.type==='Purchase'||x.type==='Sale'||x.type==='Expense')?(mode==='credit'?'Unpaid':'Paid'):(x.type==='Payment-In'||x.type==='Payment-Out'?'Used':'—');
     const receivedPaid=(x.type==='Payment-In'||x.type==='Payment-Out')?x.amount:0;
     const txnBalance=(x.type==='Payment-In'||x.type==='Payment-Out')?'':(mode==='credit'||x.type==='Purchase'||x.type==='Debit Note'?x.amount:(x.type==='Sale'||x.type==='Expense'?x.amount:0));
-    const running=(x.type==='Purchase'||x.type==='Debit Note'||x.type==='Payment-Out'||(x.type==='Expense'&&mode==='credit'))?payable:(x.type==='Sale'&&mode==='credit'?receivable:(x.type==='Payment-In'?receivable:(x.type==='Credit Note'?receivable:(x.type==='Sale'?receivable:bal))));
+    const running=bal;
     const items=Array.isArray(rec.items)?rec.items:[];
     const itemRows=items.map((it,i)=>{
       const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(z=>String(z.id)===String(it.itemId));
@@ -6765,34 +6764,30 @@ function openSaleAddItemPopup(){
 }
 function salePopupItemInput(input){
   const sel=document.getElementById('salePopupItem');if(!sel||!input)return;
-  const value=(input.value||'').trim().toLowerCase();
+  const raw=String(input.value||'').trim();
+  const normalize=v=>String(v||'').toLowerCase().normalize('NFKC').replace(/[—–−]/g,'-').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  const value=normalize(raw);
+  if(!value){sel.value='';updateSalePopupAvailability();return;}
   const options=Array.from(sel.options).filter(o=>o.value);
-  const items=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
-  // Follow the working Purchase Add Item pattern: exact displayed-name match,
-  // with exact item-name or item-code support as a convenience.
-  let option=options.find(o=>o.textContent.trim().toLowerCase()===value);
+  // Match the full displayed label first, then item name/code separately. This
+  // avoids the hidden item selector remaining blank when a datalist suggestion is chosen.
+  let option=options.find(o=>normalize(o.textContent)===value);
   if(!option) option=options.find(o=>{
-    const item=items.find(i=>String(i.id)===String(o.value));
-    return item && (String(item.name||'').trim().toLowerCase()===value ||
-      (item.code&&String(item.code).trim().toLowerCase()===value));
+    const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(o.value));
+    return item && (normalize(item.name)===value || (item.code && normalize(item.code)===value));
   });
-  if(option){
-    sel.value=option.value;
-    salePopupItemChanged();
-  } else {
-    // Never keep an earlier item selected while the user is typing a different one.
-    sel.value='';
-    const box=document.getElementById('salePopupItemSuggestions');
-    if(box){box.style.display='none';box.innerHTML='';}
-    updateSalePopupAvailability();
+  if(!option && value.length>=3){
+    const matches=options.filter(o=>normalize(o.textContent).startsWith(value));
+    if(matches.length===1) option=matches[0];
   }
+  if(option){sel.value=option.value;salePopupItemChanged();}
 }
 function salePopupItemChanged(){
   const sel=document.getElementById('salePopupItem'),o=sel?.options[sel.selectedIndex];if(!o)return;
   const search=document.getElementById('salePopupItemSearch');if(search)search.value=o.value?o.textContent:'';
   const rate=document.getElementById('salePopupRate');if(rate)rate.value=o.dataset.rate||0;
   const unit=document.getElementById('salePopupUnit');if(unit)unit.value=o.dataset.unit||'Nos';
-  const box=document.getElementById('salePopupItemSuggestions');if(box){box.style.display='none';box.innerHTML='';}
+  const box=document.getElementById('salePopupItemSuggestions');if(box)box.style.display='none';
   const gd=document.getElementById('salePopupGodown'),service=isServiceSaleItem(o.value);if(gd){if(service)gd.value='';gd.disabled=service;gd.title=service?'Godown is not required for a service':'';}
   updateSalePopupAvailability();calculateSalePopupAmount();
 }
@@ -6810,14 +6805,10 @@ function calculateSalePopupAmount(){
   const base=q*r,discount=base*d/100,taxable=base-discount,tax=taxable*g/100,amount=taxable+tax;const el=document.getElementById('salePopupAmount');if(el)el.textContent='₹ '+amount.toFixed(2);
 }
 function saveSalePopupItem(continueAdding){
-  const search=document.getElementById('salePopupItemSearch'),sel=document.getElementById('salePopupItem');
-  if(search&&sel&&!sel.value)salePopupItemInput(search);
-  const itemId=sel?.value||'',godownId=document.getElementById('salePopupGodown')?.value||'',qty=Number(document.getElementById('salePopupQty')?.value)||0,service=isServiceSaleItem(itemId);
-  if(!itemId){alert('Please select an Item from the dropdown.');if(search)search.focus();return;}
-  if(!service&&!godownId){alert('Please select a Godown.');return;}
-  if(qty<=0){alert('Sale quantity must be greater than zero.');return;}
-  const available=updateSalePopupAvailability();
-  if(!service&&qty>available){const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId));alert(`Insufficient stock for ${item?.name||'item'} in selected godown. Available quantity is ${available} ${item?.unit||''}.`);return;}
+  const search=document.getElementById('salePopupItemSearch');if(search)salePopupItemInput(search);
+  const itemId=document.getElementById('salePopupItem')?.value||'',godownId=document.getElementById('salePopupGodown')?.value||'',qty=Number(document.getElementById('salePopupQty')?.value)||0,service=isServiceSaleItem(itemId);
+  if(!itemId){alert('Please select an Item.');return;} if(!service&&!godownId){alert('Please select a Godown.');return;} if(qty<=0){alert('Sale quantity must be greater than zero.');return;}
+  const available=updateSalePopupAvailability();if(!service&&qty>available){const item=JSON.parse(localStorage.getItem('mviapps_items')||'[]').find(i=>String(i.id)===String(itemId));alert(`Insufficient stock for ${item?.name||'item'} in selected godown. Available quantity is ${available} ${item?.unit||''}.`);return;}
   addSaleInvoiceItemRow({itemId,godownId,qty,rate:Number(document.getElementById('salePopupRate')?.value)||0,discount:Number(document.getElementById('salePopupDiscount')?.value)||0,gst:Number(document.getElementById('salePopupGst')?.value)||0});
   if(continueAdding){openSaleAddItemPopup();}else closeSaleAddItemPopup();
 }
@@ -8207,8 +8198,7 @@ function renderItemGodownAvailability(){const rows=document.getElementById('godo
 
 function ensureOpeningAllocation(item,gs){let stock=getGodownStock(), has=stock.some(x=>String(x.itemId)===String(item.id));if(has)return stock;let g=gs.find(x=>String(x.name||'').trim().toLowerCase()==='main godown')||gs[0];const q=Number(item.qty)||0;if(g&&q>0)stock.push({id:Date.now()+Math.random(),itemId:item.id,godownId:g.id,qty:q});saveGodownStock(stock);return stock;}
 function syncGodownStockWithClosing(item,gs){
-  if(!item||!Array.isArray(gs)||!gs.length)return getGodownStock();
-  const items=JSON.parse(localStorage.getItem('mviapps_items')||'[]');
+  if(!item||!gs.length)return getGodownStock();
   const main=gs.find(g=>String(g.name||'').trim().toLowerCase()==='main godown')||gs[0];
   const itemId=String(item.id), mainId=String(main.id);
   const stock=getGodownStock().filter(x=>String(x.itemId)!==itemId);
