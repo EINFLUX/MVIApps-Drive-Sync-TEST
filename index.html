@@ -1821,7 +1821,7 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
       <button onclick="show('party-details',this)">Party Details</button><button onclick="show('party-ledger',this)">Party Ledger</button><button onclick="show('receivable',this)">Receivable</button><button onclick="show('payable',this)">Payable</button>
     </div></div>
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon items">▣</span>Items <span class="chev">⌄</span></button><div class="sub">
-      <button onclick="show('item-details',this)">Item Details</button><button onclick="show('stock-summary',this)">Stock Summary</button><button onclick="show('stock-ledger',this)">Stock Ledger</button><button onclick="show('godown-management',this)">Godown Management</button>
+      <button onclick="show('item-details',this)">Item Details</button><button onclick="show('item-barcode-print',this)">Barcode Printing</button><button onclick="show('stock-summary',this)">Stock Summary</button><button onclick="show('stock-ledger',this)">Stock Ledger</button><button onclick="show('godown-management',this)">Godown Management</button>
     </div></div>
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon sale">↗</span>Sale <span class="chev">⌄</span></button><div class="sub">
       <button onclick="show('sale-invoices',this)">Sale Invoices</button><button onclick="show('payment-in',this)">Payment-In</button><button onclick="show('other-income',this)">Other Income</button>
@@ -4044,6 +4044,180 @@ function filterMviHelp(query){
   const empty=root.querySelector('#mviHelpEmpty');if(empty)empty.style.display=visible?'none':'block';
 }
 
+
+/* MVIApps Barcode Printing — isolated add-on; does not alter item records or POS logic. */
+function barcodePrintingPage(){
+  return `<style id="mvi-barcode-print-style">
+  .mvi-bc-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .mvi-bc-toolbar input{min-width:220px;flex:1}
+  .mvi-bc-table-wrap{overflow:auto;max-height:440px;border:1px solid var(--line);border-radius:10px}
+  .mvi-bc-table{width:100%;border-collapse:collapse;font-size:13px}
+  .mvi-bc-table th,.mvi-bc-table td{padding:10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  .mvi-bc-table th{position:sticky;top:0;background:#f8fafc;z-index:1}
+  .mvi-bc-table input[type=number]{width:76px;padding:7px;border:1px solid var(--line);border-radius:7px}
+  .mvi-bc-help{font-size:12px;color:var(--muted);margin:0 0 14px}
+  .mvi-bc-count{font-size:12px;color:var(--muted);margin-left:auto}
+  </style>
+  <div class="page-head"><div><h1>Barcode Printing</h1><p>Choose items and print barcode labels to paste on products.</p></div></div>
+  <div class="panel">
+    <p class="mvi-bc-help">Barcode uses the saved Barcode/SKU field. If it is empty, the existing Item Code is used. Item data is not changed.</p>
+    <div class="mvi-bc-toolbar">
+      <input id="mviBarcodeSearch" class="input" type="search" placeholder="Search item name, item code or barcode..." oninput="renderMVIBarcodeItems()">
+      <button class="btn secondary" type="button" onclick="toggleAllMVIBarcodeItems(true)">Select All</button>
+      <button class="btn secondary" type="button" onclick="toggleAllMVIBarcodeItems(false)">Clear Selection</button>
+      <span id="mviBarcodeSelectionCount" class="mvi-bc-count">0 selected</span>
+    </div>
+    <div class="mvi-bc-table-wrap"><table class="mvi-bc-table">
+      <thead><tr><th>Select</th><th>Item Name</th><th>Item Code</th><th>Barcode Value</th><th>Labels</th></tr></thead>
+      <tbody id="mviBarcodeItemsBody"><tr><td colspan="5">Loading items…</td></tr></tbody>
+    </table></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px"><input id="mviBarcodeShowPrice" type="checkbox"> Show Selling Price on labels</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn secondary" type="button" onclick="previewMVIBarcodeLabels()">Preview Labels</button>
+        <button class="btn" type="button" onclick="printMVIBarcodeLabels()">Print Barcode Labels</button>
+      </div>
+    </div>
+    <p class="mvi-bc-help" style="margin-top:10px">Print layout: 4 columns × 10 rows on a 21 × 30 cm sheet. Each row uses cell widths of 5.1, 5.2, 5.3 and 5.4 cm respectively; every cell is 3 cm high.</p>
+    <div id="mviBarcodePreview" style="display:none;margin-top:18px"></div>
+  </div>`;
+}
+function getMVIBarcodePrintItems(){
+  return JSON.parse(localStorage.getItem('mviapps_items')||'[]');
+}
+function getMVIBarcodeValue(item){
+  return String(item?.barcode ?? item?.barCode ?? item?.Barcode ?? item?.itemBarcode ?? item?.sku ?? item?.code ?? item?.itemCode ?? '').trim();
+}
+function renderMVIBarcodeItems(){
+  const body=document.getElementById('mviBarcodeItemsBody');
+  if(!body)return;
+  const all=getMVIBarcodePrintItems();
+  const q=String(document.getElementById('mviBarcodeSearch')?.value||'').trim().toLowerCase();
+  const items=all.filter(x=>!q||[x.name,x.code,x.itemCode,getMVIBarcodeValue(x)].some(v=>String(v??'').toLowerCase().includes(q)));
+  body.innerHTML=items.map(item=>{
+    const id=String(item.id??'');
+    const value=getMVIBarcodeValue(item);
+    const safeId=id.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    const checked=window._mviBarcodeSelected?.[id]?'checked':'';
+    const qty=Math.max(1,parseInt(window._mviBarcodeQty?.[id]||'1',10)||1);
+    return `<tr><td><input type="checkbox" aria-label="Select ${String(item.name||'item').replace(/"/g,'&quot;')}" ${checked} onchange="setMVIBarcodeSelected('${safeId}',this.checked)"></td><td>${escapeMVIBarcodeText(item.name||'Unnamed item')}</td><td>${escapeMVIBarcodeText(item.code||item.itemCode||'—')}</td><td>${escapeMVIBarcodeText(value||'No code')}</td><td><input type="number" min="1" max="500" value="${qty}" aria-label="Number of labels" onchange="setMVIBarcodeQty('${safeId}',this.value)"></td></tr>`;
+  }).join('')||'<tr><td colspan="5" style="text-align:center;padding:25px">No matching items found.</td></tr>';
+  const selected=Object.keys(window._mviBarcodeSelected||{}).filter(id=>window._mviBarcodeSelected[id]&&all.some(x=>String(x.id??'')===id));
+  const count=document.getElementById('mviBarcodeSelectionCount');
+  if(count)count.textContent=`${selected.length} item(s) selected`;
+}
+function escapeMVIBarcodeText(v){
+  return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function setMVIBarcodeSelected(id,on){
+  window._mviBarcodeSelected=window._mviBarcodeSelected||{};
+  window._mviBarcodeSelected[String(id)]=!!on;
+  renderMVIBarcodeItems();
+}
+function setMVIBarcodeQty(id,value){
+  window._mviBarcodeQty=window._mviBarcodeQty||{};
+  window._mviBarcodeQty[String(id)]=Math.max(1,Math.min(500,parseInt(value,10)||1));
+}
+function toggleAllMVIBarcodeItems(on){
+  window._mviBarcodeSelected=window._mviBarcodeSelected||{};
+  const q=String(document.getElementById('mviBarcodeSearch')?.value||'').trim().toLowerCase();
+  getMVIBarcodePrintItems().filter(x=>!q||[x.name,x.code,x.itemCode,getMVIBarcodeValue(x)].some(v=>String(v??'').toLowerCase().includes(q)))
+    .forEach(x=>window._mviBarcodeSelected[String(x.id??'')]=!!on);
+  renderMVIBarcodeItems();
+}
+const MVI_CODE128_PATTERNS=[
+'212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212',
+'112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131',
+'311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321',
+'112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121',
+'313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
+'314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114',
+'122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212',
+'124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113',
+'114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'
+];
+function mviCode128SVG(raw){
+  const text=String(raw??'').replace(/[^\x20-\x7E]/g,'?').slice(0,80);
+  const vals=[104];
+  for(let i=0;i<text.length;i++)vals.push(text.charCodeAt(i)-32);
+  let checksum=104;
+  for(let i=1;i<vals.length;i++)checksum+=vals[i]*i;
+  vals.push(checksum%103,106);
+  let x=8, bars='';
+  vals.forEach(code=>{
+    const pat=MVI_CODE128_PATTERNS[code]||'212222';
+    let black=true;
+    for(const n of pat){
+      const w=Number(n)*2;
+      if(black)bars+=`<rect x="${x}" y="2" width="${w}" height="38" fill="#000"/>`;
+      x+=w;black=!black;
+    }
+  });
+  const width=x+8;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 42" role="img" aria-label="Barcode ${escapeMVIBarcodeText(text)}" style="width:100%;height:12mm;display:block"><rect width="${width}" height="42" fill="#fff"/>${bars}</svg>`;
+}
+function getMVIBarcodeSelectedLabels(){
+  const selected=window._mviBarcodeSelected||{}, qtys=window._mviBarcodeQty||{};
+  const all=getMVIBarcodePrintItems(), out=[];
+  all.forEach(item=>{
+    const id=String(item.id??'');
+    if(!selected[id])return;
+    const code=getMVIBarcodeValue(item);
+    if(!code)return;
+    const qty=Math.max(1,Math.min(500,parseInt(qtys[id]||'1',10)||1));
+    for(let i=0;i<qty;i++)out.push({name:String(item.name||'Unnamed item'),code,price:item.sale??item.sellingPrice??item.rate??''});
+  });
+  return out;
+}
+function buildMVIBarcodeSheet(labels){
+  const showPrice=!!document.getElementById('mviBarcodeShowPrice')?.checked;
+  return labels.map(item=>`<div class="mvi-print-label"><div class="mvi-print-name">${escapeMVIBarcodeText(item.name)}</div>${mviCode128SVG(item.code)}<div class="mvi-print-code">${escapeMVIBarcodeText(item.code)}</div>${showPrice&&item.price!==''&&item.price!=null?`<div class="mvi-print-price">₹ ${escapeMVIBarcodeText(item.price)}</div>`:''}</div>`).join('');
+}
+function previewMVIBarcodeLabels(){
+  const labels=getMVIBarcodeSelectedLabels(), preview=document.getElementById('mviBarcodePreview');
+  if(!preview)return;
+  if(!labels.length){alert('Please select at least one item with a barcode or item code.');return;}
+  preview.style.display='block';
+  preview.innerHTML=`<h3>Label Preview (${labels.length} labels)</h3><div class="mvi-bc-preview-grid">${buildMVIBarcodeSheet(labels.slice(0,12))}</div>${labels.length>12?'<p class="mvi-bc-help">Preview shows the first 12 labels. Printing includes all selected labels.</p>':''}
+  <style>.mvi-bc-preview-grid{display:grid;grid-template-columns:5.1fr 5.2fr 5.3fr 5.4fr;gap:4px}.mvi-bc-preview-grid .mvi-print-label{box-sizing:border-box;width:100%;aspect-ratio:5.1/3;border:1px dashed #cbd5e1;padding:3px;overflow:hidden;text-align:center;color:#111;background:#fff;display:flex;flex-direction:column;justify-content:center}.mvi-bc-preview-grid .mvi-print-name{font-size:6.904125px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mvi-bc-preview-grid .mvi-print-label svg{width:100%;max-width:100%;height:10.5mm!important;max-height:39%;transform:none;transform-origin:center;flex:0 0 auto}.mvi-bc-preview-grid .mvi-print-code{font-size:7.5px;letter-spacing:.15px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mvi-bc-preview-grid .mvi-print-price{font-size:6.904125px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}</style>`;
+}
+function printMVIBarcodeLabels(){
+  const labels=getMVIBarcodeSelectedLabels();
+  if(!labels.length){alert('Please select at least one item with a barcode or item code.');return;}
+  const w=window.open('','_blank','width=1000,height=800');
+  if(!w){alert('Please allow pop-ups to open barcode labels.');return;}
+  const sheet=buildMVIBarcodeSheet(labels);
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>MVIApps Barcode Labels</title><style>
+  @page{size:21cm 30cm;margin:0}
+  *{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+  .mvi-print-toolbar{position:sticky;top:0;z-index:5;display:flex;justify-content:center;gap:12px;padding:12px;background:#e2e8f0;border-bottom:1px solid #cbd5e1}
+  .mvi-print-toolbar button{font:600 14px Arial,sans-serif;border:0;border-radius:6px;padding:10px 16px;cursor:pointer;background:#14532d;color:#fff}
+  .mvi-print-toolbar button.secondary{background:#334155}
+  .mvi-print-note{text-align:center;font:12px Arial,sans-serif;margin:8px;color:#334155}
+  .mvi-print-sheet{display:grid;grid-template-columns:5.1cm 5.2cm 5.3cm 5.4cm;grid-template-rows:repeat(10,3cm);width:21cm;height:30cm;column-gap:0;row-gap:0;align-content:start}
+  .mvi-print-label{width:100%;height:3cm;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;padding:1mm;text-align:center;break-inside:avoid;border:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center}
+  .mvi-print-label>*{min-width:0!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;overflow:hidden!important;flex-shrink:1}
+  .mvi-print-name{display:block;font-size:6.137pt;font-weight:700;line-height:1.1;white-space:nowrap;text-overflow:ellipsis;margin-bottom:.3835625mm}
+  .mvi-print-label svg{display:block;width:100%!important;max-width:100%!important;min-width:0!important;height:10.5mm!important;max-height:10.5mm;object-fit:fill;margin:0 auto;flex:0 1 auto;overflow:hidden}
+  .mvi-print-code{display:block;white-space:nowrap;text-overflow:ellipsis;font-size:6.8pt;letter-spacing:.15px;line-height:1.05;margin-top:.30685mm}
+  .mvi-print-price{display:block;white-space:nowrap;text-overflow:ellipsis;font-size:5.7534375pt;letter-spacing:.15px;line-height:1.05;margin-top:.30685mm}
+  .mvi-print-label:nth-child(4n+1) > *{transform:scaleX(.93);transform-origin:center center}
+  .mvi-print-label:nth-child(4n) > *{transform:scaleX(.93);transform-origin:center center}
+  @media screen{body{padding:0;background:#f1f5f9}.mvi-print-sheet{background:#fff;margin:12px auto;box-shadow:0 2px 10px #0002}.mvi-print-label{border:1px dashed #ddd}}
+  @media print{html,body{width:21cm;height:30cm;padding:0;background:#fff}.mvi-print-toolbar,.mvi-print-note{display:none!important}.mvi-print-sheet{margin:0;box-shadow:none}.mvi-print-label{border:0}}
+  </style></head><body>
+  <div class="mvi-print-toolbar">
+    <button type="button" onclick="window.print()">Print Labels</button>
+    <button type="button" class="secondary" onclick="window.print()">Save as PDF</button>
+  </div>
+  <div class="mvi-print-note">For PDF: click “Save as PDF”, then choose “Save as PDF” in the browser printer destination.</div>
+  <div class="mvi-print-sheet">${sheet}</div>
+  </body></html>`);
+  w.document.close();
+  w.focus();
+}
+
 const pages={
 dashboard:{title:"Dashboard",sub:"Business overview and quick actions",html:dashboard()},
 "party-details":{title:"Party Details",sub:"Manage customers and suppliers",html:partyDetails()},
@@ -4052,6 +4226,7 @@ receivable:{title:"Receivable",sub:"Party-wise receivable balances",html:receiva
 payable:{title:"Payable",sub:"Party-wise outstanding amounts after payments and purchase returns",html:payablePage()},
 "add-item":{title:"Add Item",sub:"Create and store inventory items with images",html:itemManager()},
 "item-details":{title:"Item Details",sub:"Manage your stored inventory items",html:itemDetails()},
+"item-barcode-print":{title:"Barcode Printing",sub:"Print item barcode labels",html:barcodePrintingPage()},
 "stock-summary":{title:"Stock Summary",sub:"Current inventory position",html:stockSummary()},
 "stock-ledger":{title:"Stock Ledger",sub:"Item-wise stock movement",html:stockLedger()},"godown-management":{title:"Godown Management",sub:"Manage godowns and transfer stock between locations",html:godownManagement()},
 "point-of-sale":{title:"Point of Sale (POS)",sub:"Fast counter billing",html:pointOfSalePage()},
@@ -8831,6 +9006,7 @@ function show(id,btn){ window._mviappsCurrentPage=id; window._mviappsCurrentBtn=
   }
   if(id==='check-item-availability'){setTimeout(()=>{if(typeof initQuickItemAvailability==='function')initQuickItemAvailability();},0);}
   if(id==='item-details' && typeof renderItems==='function')renderItems();
+  if(id==='item-barcode-print' && typeof renderMVIBarcodeItems==='function')setTimeout(renderMVIBarcodeItems,0);
   if(id==='point-of-sale'){setTimeout(()=>{if(typeof initPointOfSale==='function')initPointOfSale();},0);}
   if(id==='stock-summary' && typeof renderStockSummary==='function')renderStockSummary();
   if(id==='stock-ledger' && typeof renderStockLedger==='function')renderStockLedger();
