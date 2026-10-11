@@ -6030,7 +6030,82 @@ function posPaymentModeChanged(){
   if(mode==='Bank')posLoadBankAccounts(document.getElementById('posBankAccount')?.value||'');
   posCalculateReturn();
 }
-function posSetCreditPayment(){const e=document.getElementById('posPaymentMode');if(e){e.value='Credit';posPaymentModeChanged();}posFocusCustomer();}
+function posSetCreditPayment(){posOpenCreditReceipt();}
+function posCreditReceiptData(){
+  const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
+  const invoices=JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]');
+  const receipts=JSON.parse(localStorage.getItem('mviapps_payment_in')||'[]');
+  return {parties,invoices,receipts};
+}
+function posCreditReceiptOutstanding(partyId){
+  const {invoices,receipts,parties}=posCreditReceiptData();
+  const party=parties.find(p=>String(p.id)===String(partyId));
+  const sameParty=x=>{
+    const id=x.customer??x.customerId??x.partyId??'';
+    if(id!==''&&partyId!=='')return String(id)===String(partyId);
+    const name=x.customerName||x.partyName||'';
+    return !!party&&String(name).trim().toLowerCase()===String(party.name||'').trim().toLowerCase();
+  };
+  const due=invoices.filter(x=>sameParty(x)&&String(x.paymentMode||'').toLowerCase()==='credit')
+    .reduce((sum,x)=>sum+Math.max(0,(Number(x.total??x.grandTotal??x.amount)||0)-(Number(x.amountReceived)||0)),0);
+  const paid=receipts.filter(x=>sameParty(x)).reduce((sum,x)=>sum+(Number(x.amount)||0),0);
+  return Math.max(0,due-paid);
+}
+function posOpenCreditReceipt(){
+  document.getElementById('mviPosCreditReceiptOverlay')?.remove();
+  const {parties}=posCreditReceiptData();
+  const overlay=document.createElement('div');
+  overlay.id='mviPosCreditReceiptOverlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:10030;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+  const today=new Date();const localToday=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  overlay.innerHTML=`<div style="width:min(620px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.28);color:#182230">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:17px 20px;border-bottom:1px solid #e5e7eb"><div><h2 style="margin:0;font-size:19px">Receive Credit Payment</h2><div style="margin-top:4px;color:#64748b;font-size:12px">Record money received against a customer's outstanding balance.</div></div><button type="button" onclick="posCloseCreditReceipt()" style="border:0;background:#f1f5f9;border-radius:8px;width:34px;height:34px;font-size:22px;cursor:pointer">×</button></div>
+    <div style="padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:13px">
+      <label style="font-size:12px;color:#64748b;grid-column:1/-1">Customer / Party
+        <select id="posCreditReceiptParty" onchange="posCreditReceiptUpdateBalance()" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#182230"><option value="">Select customer</option>${parties.map(p=>`<option value="${escapeAttr(p.id)}">${escapeHtml(p.name||'')}</option>`).join('')}</select>
+      </label>
+      <div id="posCreditReceiptBalance" style="grid-column:1/-1;padding:12px;border:1px solid #dbe4ee;border-radius:9px;background:#f8fafc;font-size:13px">Select a customer to view outstanding credit.</div>
+      <label style="font-size:12px;color:#64748b">Receipt Date<input id="posCreditReceiptDate" type="date" value="${localToday}" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <label style="font-size:12px;color:#64748b">Amount Received (₹)<input id="posCreditReceiptAmount" type="number" min="0.01" step="0.01" placeholder="Enter amount" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <label style="font-size:12px;color:#64748b">Payment Mode<select id="posCreditReceiptMode" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#182230"><option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option><option>Card</option></select></label>
+      <label style="font-size:12px;color:#64748b">Account / Bank (optional)<input id="posCreditReceiptAccount" type="text" placeholder="Account name" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <label style="font-size:12px;color:#64748b;grid-column:1/-1">Reference No. (optional)<input id="posCreditReceiptReference" type="text" placeholder="Transaction / cheque reference" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <label style="font-size:12px;color:#64748b;grid-column:1/-1">Description (optional)<input id="posCreditReceiptNotes" type="text" placeholder="Payment received against credit balance" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:9px;padding:12px 20px 18px;border-top:1px solid #e5e7eb"><button type="button" class="btn secondary" onclick="posCloseCreditReceipt()">Cancel</button><button type="button" class="btn" onclick="posSaveCreditReceipt()">Save Receipt</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)posCloseCreditReceipt();});
+  document.getElementById('posCreditReceiptParty')?.focus();
+}
+function posCloseCreditReceipt(){document.getElementById('mviPosCreditReceiptOverlay')?.remove();}
+function posCreditReceiptUpdateBalance(){
+  const partyId=document.getElementById('posCreditReceiptParty')?.value||'';
+  const box=document.getElementById('posCreditReceiptBalance');if(!box)return;
+  if(!partyId){box.textContent='Select a customer to view outstanding credit.';return;}
+  const due=posCreditReceiptOutstanding(partyId);
+  box.innerHTML='Current estimated credit outstanding: <strong>₹'+due.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong>';
+}
+function posSaveCreditReceipt(){
+  const partyId=document.getElementById('posCreditReceiptParty')?.value||'';
+  const date=document.getElementById('posCreditReceiptDate')?.value||'';
+  const amount=Number(document.getElementById('posCreditReceiptAmount')?.value)||0;
+  if(!partyId){alert('Please select a customer.');return;}
+  if(!date){alert('Please select the receipt date.');return;}
+  if(!ensureEntryDateInActiveFY(date,'Receipt Date'))return;
+  if(amount<=0){alert('Please enter a valid amount received.');return;}
+  const {parties}=posCreditReceiptData();
+  const party=parties.find(p=>String(p.id)===String(partyId));
+  if(!party){alert('Selected customer was not found.');return;}
+  const key='mviapps_payment_in',arr=JSON.parse(localStorage.getItem(key)||'[]');
+  const used=new Set(arr.map(x=>String(x?.number||x?.receiptNo||'').trim().toUpperCase()).filter(Boolean));
+  let n=arr.length+1,number='REC-'+String(n).padStart(4,'0');
+  while(used.has(number.toUpperCase())){n++;number='REC-'+String(n).padStart(4,'0');}
+  const record={id:Date.now(),number,date,partyId,partyName:party.name||'',incomeHead:'',amount,paymentMode:document.getElementById('posCreditReceiptMode')?.value||'Cash',account:document.getElementById('posCreditReceiptAccount')?.value.trim()||'',reference:document.getElementById('posCreditReceiptReference')?.value.trim()||'',notes:document.getElementById('posCreditReceiptNotes')?.value.trim()||'Credit payment received from POS'};
+  arr.push(record);localStorage.setItem(key,JSON.stringify(arr));
+  posCloseCreditReceipt();
+  alert('Credit payment receipt '+number+' saved successfully. It has been added to Payment-In and Party Ledger.');
+}
 
 function posOpenDatePicker(){
   const e=document.getElementById('posDate');if(!e)return;
