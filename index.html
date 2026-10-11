@@ -2077,9 +2077,11 @@ window.addEventListener('DOMContentLoaded',()=>{try{applyMVIAppsAppearance();}ca
 function reportPeriodControls(prefix,generator){
   const fys=getFinancialYears(), currentFY=getSelectedFinancialYear();
   const useDDMM=['at','db','bs','ps','bankStmt'].includes(prefix);
-  const fromDate=useDDMM?`<div class="pl-date-wrap"><label class="label">From Date</label><input id="${prefix}FromDisplay" class="input" type="text" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('${prefix}','from')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('${prefix}','from')"><button type="button" class="pl-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openReportDatePicker('${prefix}','from')">&#128197;</button><input id="${prefix}From" type="date" aria-label="Select From Date" onchange="syncReportDateDisplay('${prefix}','from')"></div>`:`<div><label class="label">From Date</label><input id="${prefix}From" class="input" type="date"></div>`;
-  const toDate=useDDMM?`<div class="pl-date-wrap"><label class="label">To Date</label><input id="${prefix}ToDisplay" class="input" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('${prefix}','to')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('${prefix}','to')"><button type="button" class="pl-calendar-btn" aria-label="Open To Date calendar" title="Select date" onclick="openReportDatePicker('${prefix}','to')">&#128197;</button><input id="${prefix}To" type="date" aria-label="Select To Date" onchange="syncReportDateDisplay('${prefix}','to')"></div>`:`<div><label class="label">To Date</label><input id="${prefix}To" class="input" type="date"></div>`;
-  return `<div class="panel report-period-panel"><div class="panel-head"><div><h3 style="margin-bottom:4px">Report Period</h3><p style="margin:0;color:var(--muted);font-size:12px">Select Financial Year, Month or an exact Date Range.</p></div></div><div class="toolbar report-period-filters" style="align-items:end;margin-top:16px"><div><label class="label">Financial Year</label><select id="${prefix}FinancialYear" class="select">${fys.map(f=>`<option value="${f.value}" ${f.value===currentFY?'selected':''}>${f.label}</option>`).join('')}</select></div><div><label class="label">Month</label><select id="${prefix}Month" class="select"><option value="all">All Months</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option><option value="1">January</option><option value="2">February</option><option value="3">March</option></select></div>${fromDate}${toDate}<button class="btn" onclick="${generator|| (prefix==='at'?'generateAllTransactions':prefix==='db'?'generateDayBook':'generateBalanceSheet')}()">View Report</button></div></div>`;
+  const fromDate=useDDMM?`<div class="pl-date-wrap"><label class="label">From Date</label><input id="${prefix}FromDisplay" class="input" type="text" aria-label="From Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('${prefix}','from')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('${prefix}','from')${prefix==='ps'?';mviappsPartyStatementCustomDateChanged()':''}"><button type="button" class="pl-calendar-btn" aria-label="Open From Date calendar" title="Select date" onclick="openReportDatePicker('${prefix}','from')">&#128197;</button><input id="${prefix}From" type="date" aria-label="Select From Date" onchange="syncReportDateDisplay('${prefix}','from')${prefix==='ps'?';mviappsPartyStatementCustomDateChanged()':''}"></div>`:`<div><label class="label">From Date</label><input id="${prefix}From" class="input" type="date"></div>`;
+  const toDate=useDDMM?`<div class="pl-date-wrap"><label class="label">To Date</label><input id="${prefix}ToDisplay" class="input" type="text" aria-label="To Date (DD/MM/YYYY)" placeholder="DD/MM/YYYY" maxlength="10" inputmode="numeric" autocomplete="off" onfocus="prepareReportDateManual('${prefix}','to')" oninput="formatReportDateInput(this)" onblur="syncReportDateManual('${prefix}','to')${prefix==='ps'?';mviappsPartyStatementCustomDateChanged()':''}"><button type="button" class="pl-calendar-btn" aria-label="Open To Date calendar" title="Select date" onclick="openReportDatePicker('${prefix}','to')">&#128197;</button><input id="${prefix}To" type="date" aria-label="Select To Date" onchange="syncReportDateDisplay('${prefix}','to')${prefix==='ps'?';mviappsPartyStatementCustomDateChanged()':''}"></div>`:`<div><label class="label">To Date</label><input id="${prefix}To" class="input" type="date"></div>`;
+  const psFYChange=prefix==='ps'?' onchange="mviappsPartyStatementPeriodChanged()"':'';
+  const psMonthChange=prefix==='ps'?' onchange="mviappsPartyStatementPeriodChanged()"':'';
+  return `<div class="panel report-period-panel"><div class="panel-head"><div><h3 style="margin-bottom:4px">Report Period</h3><p style="margin:0;color:var(--muted);font-size:12px">Select Financial Year, Month or an exact Date Range.</p></div></div><div class="toolbar report-period-filters" style="align-items:end;margin-top:16px"><div><label class="label">Financial Year</label><select id="${prefix}FinancialYear" class="select"${psFYChange}>${fys.map(f=>`<option value="${f.value}" ${f.value===currentFY?'selected':''}>${f.label}</option>`).join('')}</select></div><div><label class="label">Month</label><select id="${prefix}Month" class="select"${psMonthChange}><option value="all">All Months</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option><option value="1">January</option><option value="2">February</option><option value="3">March</option></select></div>${fromDate}${toDate}<button class="btn" onclick="${generator|| (prefix==='at'?'generateAllTransactions':prefix==='db'?'generateDayBook':'generateBalanceSheet')}()">View Report</button></div></div>`;
 }
 function syncReportDateDisplay(prefix,which){const picker=document.getElementById(prefix+(which==='from'?'From':'To')),display=document.getElementById(prefix+(which==='from'?'FromDisplay':'ToDisplay'));if(display)display.value=picker?.value?picker.value.split('-').reverse().join('/') : '';}
 function openReportDatePicker(prefix,which){const picker=document.getElementById(prefix+(which==='from'?'From':'To'));if(!picker)return;try{if(typeof picker.showPicker==='function')picker.showPicker();else picker.click();}catch(e){picker.click();}}
@@ -2106,7 +2108,30 @@ function mviappsSetReportToActiveFY(prefix){
   setReportDateValues(prefix,r.from,r.to);
   return r;
 }
+function mviappsPartyStatementPeriodChanged(){
+  const fy=document.getElementById('psFinancialYear')?.value||getSelectedFinancialYear();
+  const month=document.getElementById('psMonth')?.value||'all';
+  const start=Number(String(fy).split('-')[0])||new Date().getFullYear();
+  if(month==='all'){
+    setReportDateValues('ps',start+'-04-01',(start+1)+'-03-31');
+  }else{
+    const mo=Number(month),yr=mo>=4?start:start+1,last=new Date(yr,mo,0).getDate();
+    setReportDateValues('ps',yr+'-'+String(mo).padStart(2,'0')+'-01',yr+'-'+String(mo).padStart(2,'0')+'-'+String(last).padStart(2,'0'));
+  }
+}
+function mviappsPartyStatementCustomDateChanged(){
+  const month=document.getElementById('psMonth');
+  if(month)month.value='all';
+}
 function reportPeriodFilter(prefix){
+  if(prefix==='ps'){
+    const fy=document.getElementById('psFinancialYear')?.value||getSelectedFinancialYear();
+    const month=document.getElementById('psMonth')?.value||'all';
+    const start=Number(String(fy).split('-')[0])||new Date().getFullYear();
+    const from=document.getElementById('psFrom')?.value||start+'-04-01';
+    const to=document.getElementById('psTo')?.value||(start+1)+'-03-31';
+    return {from,to,fy,month};
+  }
   const activeFY=getActiveFinancialYear();
   const fyEl=document.getElementById(prefix+'FinancialYear');
   if(fyEl && [...fyEl.options].some(o=>o.value===activeFY)) fyEl.value=activeFY;
@@ -2346,8 +2371,21 @@ function partyReportParties(){return JSON.parse(localStorage.getItem('mviapps_pa
 function partyIdOf(x){return String(x?.partyId||x?.customerId||x?.supplierId||x?.party||x?.customer||x?.supplier||'');}
 function partyNameOf(x,parties){const id=partyIdOf(x);const p=parties.find(z=>String(z.id)===id);return p?.name||x?.partyName||x?.customerName||x?.supplierName||x?.customer||x?.supplier||(id?'Party #'+id:'Cash / General');}
 function partyReportData(from,to){
-  const parties=partyReportParties(), out=[]; const inRange=x=>{const d=String(x?.date||'');return d&&d>=from&&d<=to;};
-  const add=(key,type,fn)=>JSON.parse(localStorage.getItem(key)||'[]').filter(inRange).forEach(x=>{const id=partyIdOf(x);if(id)out.push({date:x.date||'',partyId:id,party:partyNameOf(x,parties),type,...fn(x)});});
+  const parties=partyReportParties(), out=[];
+  const norm=v=>String(v??'').trim().toLowerCase();
+  const inRange=x=>{const d=partyLedgerISODate(x?.date);return d&&d>=from&&d<=to;};
+  // Resolve records saved by older app versions using party name instead of ID.
+  // This matches Party Ledger's alias matching so the statement doesn't omit
+  // sales/purchases that should offset Payment-In/Payment-Out balances.
+  const resolvePartyId=x=>{
+    const raw=[x?.partyId,x?.customerId,x?.supplierId,x?.party,x?.customer,x?.supplier,
+      x?.partyName,x?.customerName,x?.supplierName].map(norm).filter(Boolean);
+    const found=parties.find(p=>raw.some(v=>v===norm(p.id)||v===norm(p.name)||v===norm(p.partyName)));
+    return found?String(found.id):String(partyIdOf(x)||'');
+  };
+  const add=(key,type,fn)=>JSON.parse(localStorage.getItem(key)||'[]').filter(inRange).forEach(x=>{
+    const id=resolvePartyId(x);if(id)out.push({date:partyLedgerISODate(x.date),partyId:id,party:partyNameOf(x,parties),type,...fn(x)});
+  });
   add('mviapps_sales_invoices','Sale',x=>({ref:x.invoiceNo||x.number||'',amount:plAmount(x),record:x}));
   add('mviapps_sales_returns','Credit Note',x=>({ref:x.number||x.invoiceNo||'',amount:plAmount(x),record:x}));
   add('mviapps_purchase_invoices','Purchase',x=>({ref:x.invoiceNo||x.number||'',amount:plAmount(x),record:x}));
@@ -2369,14 +2407,19 @@ function generatePartyStatement(){
   const p=reportPeriodFilter('ps'), parties=partyReportParties(), party=parties.find(x=>String(x.id)===String(pid));
   const openingDate=String(party?.openingDate||'').trim();
   const rows=partyReportData(p.from,p.to).filter(x=>String(x.partyId)===String(pid) && (!openingDate || partyLedgerISODate(x.date)>=partyLedgerISODate(openingDate)));
-  // Match Party Ledger's default-FY opening rule. The report date controls
-  // may already contain the selected FY dates, so checking for blank inputs
-  // incorrectly skipped the Party Master opening when an Opening Balance Date
-  // was saved later in the FY (e.g. Devagya: Credit ₹8,00,000).
-  const fyb=getFinancialYearBounds(getActiveFinancialYear());
-  const defaultFYPeriod=(p.from===fyb.from && p.to===fyb.to && (p.month||'all')==='all');
+  // Use the same carry-forward opening balance as Party Ledger. Do not
+  // replace it with the Party Master opening on default FY reports, because
+  // that drops transactions from earlier periods and causes balances to differ.
   let bal=getPartyLedgerOpening(party,p.from);
-  if(defaultFYPeriod){
+  // If the party's saved opening-balance date falls inside the requested
+  // period, the visible statement rows start at that opening date (earlier
+  // rows are intentionally excluded above). Start the running balance from
+  // that effective opening amount so the first Payment-In doesn't incorrectly
+  // appear as a payable balance simply because the period began earlier.
+  const openingISO=partyLedgerISODate(openingDate);
+  const fromISO=partyLedgerISODate(p.from);
+  const toISO=partyLedgerISODate(p.to);
+  if(openingISO && fromISO && toISO && openingISO>fromISO && openingISO<=toISO){
     const base=parseMoney(party?.opening);
     bal=String(party?.balanceType||'Debit').toLowerCase()==='credit'?-Math.abs(base):Math.abs(base);
   }
@@ -4408,15 +4451,10 @@ function renderPartyLedger(){
   // figure for the selected Financial Year.  The Opening Balance Date is
   // still used for manual From/To periods, but it must not make an existing
   // FY opening disappear merely because that date was entered later.
-  let openingBefore=getPartyLedgerOpening(party,effectiveFrom);
-  if(noManualDates){
-    const base=parseMoney(party?.opening);
-    const baseSigned=String(party?.balanceType||'Debit').toLowerCase()==='credit'?-Math.abs(base):Math.abs(base);
-    // For the default FY view, a non-zero Party Master opening is the
-    // opening figure of that FY. This is the value the user expects to see
-    // when no manual period is selected (e.g. Devagya = ₹8,00,000).
-    if(base) openingBefore=baseSigned;
-  }
+  // Always carry forward transactions dated before the selected period.
+  // This keeps Party Ledger closing balance consistent with the Receivable/
+  // Payable summaries and avoids dropping prior-period collections/payments.
+  const openingBefore=getPartyLedgerOpening(party,effectiveFrom);
   const openingDate=String(party?.openingDate||'').trim();
   const all=getPartyLedgerEntryData(pid).filter(x=>!openingDate||x.date>=openingDate);
   const tx=all.filter(x=>x.date>=effectiveFrom && x.date<=effectiveTo);
@@ -6038,18 +6076,21 @@ function posCreditReceiptData(){
   return {parties,invoices,receipts};
 }
 function posCreditReceiptOutstanding(partyId){
-  const {invoices,receipts,parties}=posCreditReceiptData();
+  // POS Credit Payment must show the same closing debit balance as Party Ledger.
+  // Do not replace the carry-forward opening with the Party Master opening:
+  // that double-counts older transactions (e.g. ₹15,52,500 instead of ₹5,02,500).
+  const parties=JSON.parse(localStorage.getItem('mviapps_parties')||'[]');
   const party=parties.find(p=>String(p.id)===String(partyId));
-  const sameParty=x=>{
-    const id=x.customer??x.customerId??x.partyId??'';
-    if(id!==''&&partyId!=='')return String(id)===String(partyId);
-    const name=x.customerName||x.partyName||'';
-    return !!party&&String(name).trim().toLowerCase()===String(party.name||'').trim().toLowerCase();
-  };
-  const due=invoices.filter(x=>sameParty(x)&&String(x.paymentMode||'').toLowerCase()==='credit')
-    .reduce((sum,x)=>sum+Math.max(0,(Number(x.total??x.grandTotal??x.amount)||0)-(Number(x.amountReceived)||0)),0);
-  const paid=receipts.filter(x=>sameParty(x)).reduce((sum,x)=>sum+(Number(x.amount)||0),0);
-  return Math.max(0,due-paid);
+  if(!party)return 0;
+  const fyb=getFinancialYearBounds(getActiveFinancialYear());
+  const from=fyb.from,to=fyb.to;
+  const opening=getPartyLedgerOpening(party,from);
+  const openingDate=String(party?.openingDate||'').trim();
+  const entries=getPartyLedgerEntryData(partyId).filter(x=>
+    (!openingDate||x.date>=partyLedgerISODate(openingDate))&&x.date>=from&&x.date<=to
+  );
+  const closing=entries.reduce((balance,x)=>balance+Number(x.debit||0)-Number(x.credit||0),opening);
+  return Math.max(0,closing);
 }
 function posOpenCreditReceipt(){
   document.getElementById('mviPosCreditReceiptOverlay')?.remove();
@@ -8745,7 +8786,7 @@ function show(id,btn){ window._mviappsCurrentPage=id; window._mviappsCurrentBtn=
   // Negative/loss highlighting is intentionally limited to the Profit & Loss report.
   // Do not scan other reports, because dates, item names and references may contain '-'.
   if(id==='report-profit-loss') setTimeout(()=>{const fy=document.getElementById('plFinancialYear')?.value||getSelectedFinancialYear(); const start=Number(String(fy).split('-')[0])||new Date().getFullYear(); setProfitLossDateValues(start+'-04-01',(start+1)+'-03-31'); highlightProfitLossNegatives(content);},0);
-  if(['report-all-transactions','report-day-book','report-balance-sheet','report-party-statement'].includes(id)) setTimeout(()=>{const prefix=id==='report-all-transactions'?'at':id==='report-day-book'?'db':id==='report-balance-sheet'?'bs':'ps'; const fy=document.getElementById(prefix+'FinancialYear')?.value||getSelectedFinancialYear(); const start=Number(String(fy).split('-')[0])||new Date().getFullYear(); setReportDateValues(prefix,start+'-04-01',(start+1)+'-03-31');},0);
+  if(['report-all-transactions','report-day-book','report-balance-sheet','report-party-statement'].includes(id)) setTimeout(()=>{const prefix=id==='report-all-transactions'?'at':id==='report-day-book'?'db':id==='report-balance-sheet'?'bs':'ps'; const fy=document.getElementById(prefix+'FinancialYear')?.value||getSelectedFinancialYear(); const start=Number(String(fy).split('-')[0])||new Date().getFullYear(); setReportDateValues(prefix,start+'-04-01',(start+1)+'-03-31'); if(prefix==='ps'){const month=document.getElementById('psMonth');if(month)month.value='all';}},0);
   document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   window.scrollTo(0,0);
