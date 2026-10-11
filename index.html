@@ -6056,29 +6056,31 @@ function posOpenCreditReceipt(){
   const {parties}=posCreditReceiptData();
   const overlay=document.createElement('div');
   overlay.id='mviPosCreditReceiptOverlay';
-  overlay.style.cssText='position:fixed;inset:0;z-index:10030;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+  overlay.style.cssText='position:fixed;inset:0;z-index:10030;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box';
   const today=new Date();const localToday=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  overlay.innerHTML=`<div style="width:min(620px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.28);color:#182230">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:17px 20px;border-bottom:1px solid #e5e7eb"><div><h2 style="margin:0;font-size:19px">Receive Credit Payment</h2><div style="margin-top:4px;color:#64748b;font-size:12px">Record money received against a customer's outstanding balance.</div></div><button type="button" onclick="posCloseCreditReceipt()" style="border:0;background:#f1f5f9;border-radius:8px;width:34px;height:34px;font-size:22px;cursor:pointer">×</button></div>
-    <div style="padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:13px">
+  overlay.innerHTML=`<div style="width:min(620px,96vw);max-height:calc(100vh - 16px);overflow:hidden;background:#fff;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.28);color:#182230;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #e5e7eb"><div><h2 style="margin:0;font-size:19px">Receive Credit Payment</h2><div style="margin-top:4px;color:#64748b;font-size:12px">Record money received against a customer's outstanding balance.</div></div><button type="button" onclick="posCloseCreditReceipt()" style="border:0;background:#f1f5f9;border-radius:8px;width:34px;height:34px;font-size:22px;cursor:pointer">×</button></div>
+    <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1 1 auto;min-height:0;box-sizing:border-box">
       <label style="font-size:12px;color:#64748b;grid-column:1/-1">Customer / Party
-        <select id="posCreditReceiptParty" onchange="posCreditReceiptUpdateBalance()" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#182230"><option value="">Select customer</option>${parties.map(p=>`<option value="${escapeAttr(p.id)}">${escapeHtml(p.name||'')}</option>`).join('')}</select>
+        <select id="posCreditReceiptParty" onchange="posCreditReceiptUpdateBalance()" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#182230"><option value="">Select customer</option>${parties.map(p=>`<option value="${escapeAttr(p.id)}">${escapeHtml(p.name||'')}</option>`).join('')}</select>
       </label>
-      <div id="posCreditReceiptBalance" style="grid-column:1/-1;padding:12px;border:1px solid #dbe4ee;border-radius:9px;background:#f8fafc;font-size:13px">Select a customer to view outstanding credit.</div>
-      <label style="font-size:12px;color:#64748b">Receipt Date<input id="posCreditReceiptDate" type="date" value="${localToday}" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
-      <label style="font-size:12px;color:#64748b">Amount Received (₹)<input id="posCreditReceiptAmount" type="number" min="0.01" step="0.01" placeholder="Enter amount" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
-      <label style="font-size:12px;color:#64748b">Payment Mode<select id="posCreditReceiptMode" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#182230"><option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option><option>Card</option></select></label>
-      <label style="font-size:12px;color:#64748b">Account / Bank (optional)<input id="posCreditReceiptAccount" type="text" placeholder="Account name" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
-      <label style="font-size:12px;color:#64748b;grid-column:1/-1">Reference No. (optional)<input id="posCreditReceiptReference" type="text" placeholder="Transaction / cheque reference" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
-      <label style="font-size:12px;color:#64748b;grid-column:1/-1">Description (optional)<input id="posCreditReceiptNotes" type="text" placeholder="Payment received against credit balance" style="display:block;width:100%;margin-top:5px;padding:11px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <div id="posCreditReceiptBalance" style="grid-column:1/-1;padding:8px;border:1px solid #dbe4ee;border-radius:9px;background:#f8fafc;font-size:13px">Select a customer to view outstanding credit.</div>
+      <label style="font-size:12px;color:#64748b">Receipt Date<div style="display:flex;gap:6px;margin-top:5px"><input id="posCreditReceiptDate" type="text" inputmode="numeric" placeholder="dd/mm/yyyy" value="${localToday.split('-').reverse().join('/')}" maxlength="10" style="display:block;min-width:0;flex:1;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px"><button type="button" aria-label="Choose receipt date" onclick="posOpenCreditReceiptDatePicker()" style="width:42px;flex-shrink:0;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer;font-size:18px">▦</button><input id="posCreditReceiptDatePicker" type="date" value="${localToday}" aria-label="Calendar date selector" onchange="posSetCreditReceiptDateFromPicker(this.value)" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></div></label>
+      <label style="font-size:12px;color:#64748b">Amount Received (₹)<input id="posCreditReceiptAmount" type="number" min="0.01" step="0.01" placeholder="Enter amount" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <label style="font-size:12px;color:#64748b">Payment Mode<select id="posCreditReceiptMode" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#182230"><option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option><option>Card</option></select></label>
+      <label style="font-size:12px;color:#64748b">Account / Bank (optional)<input id="posCreditReceiptAccount" type="text" placeholder="Account name" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <label style="font-size:12px;color:#64748b;grid-column:1/-1">Reference No. (optional)<input id="posCreditReceiptReference" type="text" placeholder="Transaction / cheque reference" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #cbd5e1;border-radius:8px"></label>
+      <label style="font-size:12px;color:#64748b;grid-column:1/-1">Description (optional)<input id="posCreditReceiptNotes" type="text" placeholder="Payment received against credit balance" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #cbd5e1;border-radius:8px"></label>
     </div>
-    <div style="display:flex;justify-content:flex-end;gap:9px;padding:12px 20px 18px;border-top:1px solid #e5e7eb"><button type="button" class="btn secondary" onclick="posCloseCreditReceipt()">Cancel</button><button type="button" class="btn" onclick="posSaveCreditReceipt()">Save Receipt</button></div>
+    <div style="display:flex;justify-content:flex-end;gap:9px;padding:8px 16px 10px;border-top:1px solid #e5e7eb;flex:0 0 auto"><button type="button" class="btn secondary" onclick="posCloseCreditReceipt()">Cancel</button><button type="button" class="btn" onclick="posSaveCreditReceipt()">Save Receipt</button></div>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click',e=>{if(e.target===overlay)posCloseCreditReceipt();});
   document.getElementById('posCreditReceiptParty')?.focus();
 }
 function posCloseCreditReceipt(){document.getElementById('mviPosCreditReceiptOverlay')?.remove();}
+function posOpenCreditReceiptDatePicker(){const p=document.getElementById('posCreditReceiptDatePicker');if(!p)return;const t=(document.getElementById('posCreditReceiptDate')?.value||'').trim();const m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m){const iso=m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');if(!Number.isNaN(Date.parse(iso)))p.value=iso;}try{p.showPicker?.();if(typeof p.showPicker!=='function')p.click();}catch(e){try{p.click();}catch(ignore){}}}
+function posSetCreditReceiptDateFromPicker(iso){const d=document.getElementById('posCreditReceiptDate');if(d&&iso)d.value=iso.split('-').reverse().join('/');}
 function posCreditReceiptUpdateBalance(){
   const partyId=document.getElementById('posCreditReceiptParty')?.value||'';
   const box=document.getElementById('posCreditReceiptBalance');if(!box)return;
@@ -6088,10 +6090,13 @@ function posCreditReceiptUpdateBalance(){
 }
 function posSaveCreditReceipt(){
   const partyId=document.getElementById('posCreditReceiptParty')?.value||'';
-  const date=document.getElementById('posCreditReceiptDate')?.value||'';
+  const dateText=(document.getElementById('posCreditReceiptDate')?.value||'').trim();
+  const dateMatch=dateText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const date=dateMatch?`${dateMatch[3]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[1].padStart(2,'0')}`:'';
+  const validDate=!!date&&(()=>{const d=new Date(date+'T00:00:00');return d.getFullYear()===Number(dateMatch[3])&&d.getMonth()+1===Number(dateMatch[2])&&d.getDate()===Number(dateMatch[1]);})();
   const amount=Number(document.getElementById('posCreditReceiptAmount')?.value)||0;
   if(!partyId){alert('Please select a customer.');return;}
-  if(!date){alert('Please select the receipt date.');return;}
+  if(!validDate){alert('Please enter the receipt date in dd/mm/yyyy format or select it from the calendar.');return;}
   if(!ensureEntryDateInActiveFY(date,'Receipt Date'))return;
   if(amount<=0){alert('Please enter a valid amount received.');return;}
   const {parties}=posCreditReceiptData();
