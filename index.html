@@ -8269,6 +8269,9 @@ function syncGodownStockWithClosing(item,gs){
   if(!item||!gs.length)return getGodownStock();
   const main=gs.find(g=>String(g.name||'').trim().toLowerCase()==='main godown')||gs[0];
   const itemId=String(item.id), mainId=String(main.id);
+  // Use the item passed into this function. A reference to an undeclared
+  // `items` variable here can throw when stock is recalculated from the sale popup.
+  const isStockItem=!isServiceSaleItem(item);
   const stock=getGodownStock().filter(x=>String(x.itemId)!==itemId);
   const byId={};
   gs.forEach(g=>byId[String(g.id)]={id:Date.now()+Math.random(),itemId:item.id,godownId:g.id,qty:0});
@@ -8283,9 +8286,9 @@ function syncGodownStockWithClosing(item,gs){
   const transfers=JSON.parse(localStorage.getItem('mviapps_godown_transfers')||'[]');
   const bounds=getFinancialYearBounds(),fyFrom=bounds.from||'',fyTo=bounds.to||'';
   const events=[];
-  purchases.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&!isServiceSaleItem(items.find(i=>String(i.id)===itemId))).forEach(it=>events.push({date:inv.date||'',order:1,type:'purchase',qty:Number(it.qty)||0})));
-  purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&!isServiceSaleItem(items.find(i=>String(i.id)===itemId))).forEach(it=>events.push({date:inv.date||'',order:2,type:'return',qty:Number(it.qty)||0})));
-  sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&!isServiceSaleItem(items.find(i=>String(i.id)===itemId))).forEach(it=>events.push({date:inv.date||'',order:4,type:'sale',qty:Number(it.qty)||0,godownId:it.godownId})));
+  purchases.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&isStockItem).forEach(it=>events.push({date:inv.date||'',order:1,type:'purchase',qty:Number(it.qty)||0})));
+  purchaseReturns.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&isStockItem).forEach(it=>events.push({date:inv.date||'',order:2,type:'return',qty:Number(it.qty)||0})));
+  sales.forEach(inv=>(inv.items||[]).filter(it=>String(it.itemId)===itemId&&isStockItem).forEach(it=>events.push({date:inv.date||'',order:4,type:'sale',qty:Number(it.qty)||0,godownId:it.godownId})));
   adjustments.filter(x=>String(x.itemId)===itemId).forEach(x=>events.push({date:x.date||'',order:5,type:'adjustment',qty:Number(x.adjustmentQty||x.qty)||0,adjustmentType:x.adjustmentType,godownId:x.godownId}));
   transfers.filter(x=>String(x.itemId)===itemId).forEach(x=>events.push({date:x.date||'',order:3,type:'transfer',qty:Number(x.qty)||0,from:x.fromGodownId,to:x.toGodownId}));
   events.sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.order-b.order);
