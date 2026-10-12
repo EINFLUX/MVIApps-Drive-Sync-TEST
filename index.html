@@ -4987,12 +4987,6 @@ function generateProfitLoss(){
     <div class="pl-pdf-duration">Duration: ${escapeHtml(periodLabel)}</div>
     <div class="pl-pdf-meta">Financial Year: ${escapeHtml(fy)} &nbsp;&nbsp; | &nbsp;&nbsp; ${escapeHtml(monthName)}</div>
     ${statement}
-    <div class="pl-pdf-insights">
-      <div><span>Gross Profit / Loss</span><b>${plMoney(Math.abs(grossProfitPDF))}</b></div>
-      <div><span>Gross Margin</span><b>${grossMarginPDF.toFixed(2)}%</b></div>
-      <div><span>Net Profit / Loss</span><b>${plMoney(Math.abs(netProfitPDF))}</b></div>
-      <div><span>Net Margin</span><b>${netMarginPDF.toFixed(2)}%</b></div>
-    </div>
     <div class="pl-detail-grid">
       <div class="pl-detail-card"><div class="pl-detail-title">Sales Register — Detail</div><table><thead><tr><th>Date</th><th>Invoice No.</th><th>Party</th><th class="num">Amount</th></tr></thead><tbody>${invoiceRows(sales,'Sales')}</tbody><tfoot><tr><th colspan="3">Total Sales</th><th class="num">${plMoney(saleTotal)}</th></tr></tfoot></table></div>
       <div class="pl-detail-card"><div class="pl-detail-title">Purchase Register — Detail</div><table><thead><tr><th>Date</th><th>Bill No.</th><th>Party</th><th class="num">Amount</th></tr></thead><tbody>${invoiceRows(purchases,'Purchase')}</tbody><tfoot><tr><th colspan="3">Total Purchases</th><th class="num">${plMoney(purchaseTotal)}</th></tr></tfoot></table></div>
@@ -5056,6 +5050,11 @@ function printProfitLoss(){
         box-shadow:none!important;
       }
       body.pl-print-mode #profitLossResult .pl-pdf-actions{display:none!important}
+      /* Print-only: begin Stock Valuation on a fresh page. */
+      body.pl-print-mode #profitLossResult .pl-stock-detail{
+        break-before:page!important;
+        page-break-before:always!important;
+      }
       body.pl-print-mode #profitLossResult .pl-detail-card,
       body.pl-print-mode #profitLossResult .pl-pdf-statement{
         break-inside:auto;
