@@ -72,15 +72,20 @@ button:disabled{opacity:.55;cursor:wait}
       <button class="secondary" type="button" id="refreshBtn">Refresh verification status</button>
       <button class="secondary" type="button" id="resendBtn">Resend verification email</button>
       <button class="secondary" type="button" id="testApiBtn">Test Worker /whoami</button>
+      <button class="secondary" type="button" id="trialBtn">Start / View 15-Day Trial</button>
       <button class="secondary" type="button" id="signoutBtn">Sign out</button>
+    </div>
+    <div id="trialPanel" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff">
+      <div style="font-weight:800;margin-bottom:6px">Server-side Trial status</div>
+      <div id="trialDetails" style="font-size:13px;line-height:1.6;overflow-wrap:anywhere"></div>
     </div>
   </section>
 
   <div class="note">
     <strong>Testing notes</strong><br>
     • Use an email account you control, not a customer's account.<br>
-    • The trial period is <strong>not</strong> started by this page yet; server-side trial creation is a later step.<br>
-    • The Worker test checks only Firebase identity. Customer records remain disabled.<br>
+    • The Trial button requests a server-side 15-day test Trial; repeated requests for the same Firebase UID should return the existing dates.<br>
+    • The Worker identity test checks Firebase identity. Customer records remain disabled.<br>
     • For the Worker CORS test, open this page from <strong>https://mviapps.xusma.in</strong> (not by double-clicking the local HTML file). Do not replace the site's index.html.
   </div>
   <div class="footer">MVIApps Test Registration · Separate from the live application</div>
@@ -94,7 +99,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDF6iSPn_FLpvJFOHsNvfiBzvkUO57Q8PA",
+  apiKey: "AIzaSyDYf6iSPn_FLpvJFOHsNvfiBzvkU057Q8PA",
   authDomain: "mviapps-test-auth.firebaseapp.com",
   projectId: "mviapps-test-auth",
   storageBucket: "mviapps-test-auth.firebasestorage.app",
@@ -103,6 +108,7 @@ const firebaseConfig = {
 };
 
 const WORKER_WHOAMI_URL = "https://mviapps-test-api.mvi2k21.workers.dev/whoami";
+const WORKER_TRIAL_URL = "https://mviapps-test-api.mvi2k21.workers.dev/trial";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
@@ -119,6 +125,9 @@ const verifiedState = document.getElementById("verifiedState");
 const refreshBtn = document.getElementById("refreshBtn");
 const resendBtn = document.getElementById("resendBtn");
 const testApiBtn = document.getElementById("testApiBtn");
+const trialBtn = document.getElementById("trialBtn");
+const trialPanel = document.getElementById("trialPanel");
+const trialDetails = document.getElementById("trialDetails");
 const signoutBtn = document.getElementById("signoutBtn");
 
 let mode = "signup";
@@ -168,6 +177,7 @@ function renderUser(user) {
   currentUser = user;
   if (!user) {
     accountPanel.classList.add("hidden");
+    trialPanel.classList.add("hidden");
     return;
   }
   accountPanel.classList.remove("hidden");
@@ -267,6 +277,67 @@ testApiBtn.addEventListener("click", async () => {
     }
   } catch (error) {
     showStatus(`Worker test could not complete: ${error.message || "network/CORS error"}. Make sure this page is hosted at https://mviapps.xusma.in and the Worker is deployed.`, "error");
+  }
+});
+
+trialBtn.addEventListener("click", async () => {
+  const user = auth.currentUser;
+  if (!user) {
+    showStatus("Please create or sign in to a test account first.", "error");
+    return;
+  }
+
+  trialBtn.disabled = true;
+  trialBtn.textContent = "Checking Trial…";
+  trialPanel.classList.remove("hidden");
+  trialDetails.textContent = "Contacting the server. Your existing Trial, if any, will not be restarted.";
+
+  try {
+    await user.reload();
+    if (!auth.currentUser.emailVerified) {
+      renderUser(auth.currentUser);
+      trialDetails.textContent = "Email verification is required before a Trial can be created.";
+      showStatus("Verify your email first. No Trial was requested.", "error");
+      return;
+    }
+
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetch(WORKER_TRIAL_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      trialDetails.textContent = `Server response HTTP ${response.status}: ${result.error || "Trial request failed"}.`;
+      showStatus("Trial request was not successful. See the Trial status details below.", "error");
+      return;
+    }
+
+    const start = result.trialStart ? new Date(result.trialStart).toLocaleString() : "Unavailable";
+    const end = result.trialEnd ? new Date(result.trialEnd).toLocaleString() : "Unavailable";
+    trialDetails.textContent =
+      `Status: ${result.trialStatus || "unknown"}\n` +
+      `Trial created on this request: ${result.trialCreated ? "Yes" : "No — existing Trial returned"}\n` +
+      `Start: ${start}\nEnd: ${end}\n` +
+      `Trial length: ${result.trialDays ?? "unknown"} days`;
+    trialDetails.style.whiteSpace = "pre-line";
+
+    showStatus(
+      result.trialCreated
+        ? "A server-side test Trial was created. Click again only to verify that the same dates are returned."
+        : "An existing Trial was returned. It was not restarted.",
+      "success"
+    );
+  } catch (error) {
+    trialDetails.textContent = `Could not contact the Trial service: ${error.message || "network/CORS error"}.`;
+    showStatus("Trial request could not complete. Confirm the Worker is deployed and this page is opened from https://mviapps.xusma.in.", "error");
+  } finally {
+    trialBtn.disabled = false;
+    trialBtn.textContent = "Start / View 15-Day Trial";
   }
 });
 
