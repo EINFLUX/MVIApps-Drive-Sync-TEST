@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MVIApps Production API Read-only Test</title>
+<style>body{font-family:Arial,sans-serif;background:#f3f6fb;color:#1b263b;margin:0;padding:24px}.card{max-width:620px;margin:auto;background:#fff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;box-shadow:0 8px 30px #182b4a12}.brand{text-align:center;font-size:28px;font-weight:800;color:#243f91}.sub{text-align:center;color:#64748b;margin:6px 0 24px}h1{font-size:22px}label{display:block;font-size:13px;margin:14px 0 6px}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px}button{border:0;border-radius:8px;padding:12px 16px;background:#315bff;color:white;font-weight:700;cursor:pointer;margin:10px 8px 0 0}button:disabled{opacity:.55}.secondary{background:#e9eef6;color:#24324a}.msg,.result{padding:12px;border-radius:9px;background:#f3f6fb;margin-top:14px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.warn{background:#fff5e8;color:#854d0e}.small{font-size:12px;line-height:1.6;color:#64748b;margin-top:18px}</style></head>
+<body><main class="card"><div class="brand">MVIApps</div><div class="sub">Production API read-only diagnostic</div><h1>Check API connection</h1><p>This separate test page checks only <code>/whoami</code> and the existing <code>/trial-access</code> record. It cannot create or restart a Trial.</p>
+<label for="email">Verified Production test-account email</label><input id="email" type="email" autocomplete="username" placeholder="Email address">
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password">
+<button id="signin">Sign in</button><button id="signout" class="secondary" disabled>Sign out</button>
+<div id="msg" class="msg">Not signed in.</div><div><button id="who" disabled>Test /whoami</button><button id="access" disabled>Test Trial Access</button></div><div id="result" class="result">Results will appear here.</div>
+<div class="msg warn"><b>Safety:</b> Do not press any Trial creation button during this test. This page has no such button. Do not share passwords, tokens, or secrets.</div>
+<p class="small">This file must be opened from <b>https://mviapps.xusma.in</b> after uploading it as a separate filename to the existing GitHub Pages repository. Do not replace <code>index.html</code>. Production API and existing customer data are not modified by these two GET checks.</p></main>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+import {getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+const firebaseConfig={apiKey:'AIzaSyAIEGTfAF5P19KfeyTdv1XF6qMgH355iEc',authDomain:'mviapps-production.firebaseapp.com',projectId:'mviapps-production',storageBucket:'mviapps-production.firebasestorage.app',messagingSenderId:'788952583125',appId:'1:788952583125:web:b2b177901cce3066578b5c'};
+const BASE='https://mviapps-production-api.mvi2k21.workers.dev';const auth=getAuth(initializeApp(firebaseConfig));
+const $=id=>document.getElementById(id);function msg(t){$('msg').textContent=t}function result(t){$('result').textContent=t}function controls(u){$('who').disabled=!u;$('access').disabled=!u;$('signout').disabled=!u;$('signin').disabled=!!u;$('email').disabled=!!u;$('password').disabled=!!u}
+onAuthStateChanged(auth,u=>{controls(u);if(u)msg('Signed in: '+u.email+' | Email verified: '+u.emailVerified);});
+$('signin').onclick=async()=>{try{msg('Signing in…');const c=await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);await c.user.reload();if(!c.user.emailVerified){await signOut(auth);throw Error('Email is not verified. Sign-in was ended.')}msg('Signed in and email verified.');result('Ready. Run the read-only checks below.')}catch(e){msg('Sign-in failed: '+(e.message||e));}};
+$('signout').onclick=async()=>{await signOut(auth);msg('Signed out.');result('No request running.')};
+async function check(path,label){const u=auth.currentUser;if(!u){msg('Please sign in first.');return}try{result('Checking '+label+'…');await u.reload();if(!u.emailVerified)throw Error('Email is no longer verified.');const token=await u.getIdToken(true);const r=await fetch(BASE+path,{method:'GET',headers:{Authorization:'Bearer '+token}});const data=await r.json().catch(()=>({responseText:'Response was not JSON'}));result(label+'
+HTTP status: '+r.status+'
+'+JSON.stringify(data,null,2));}catch(e){result(label+' failed
+'+(e.message||String(e))+'
+If this says Failed to fetch, inspect the Console for CORS/preflight details.')}}
+$('who').onclick=()=>check('/whoami','Worker identity check');$('access').onclick=()=>check('/trial-access','Existing Trial access check');
+</script></body></html>
