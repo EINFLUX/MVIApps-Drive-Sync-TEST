@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MVIApps TEST — Remaining Stock Integration Checks</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#172033;background:#f4f7fb}
+body{margin:0;padding:18px}.wrap{max-width:1050px;margin:auto}
+h1{font-size:23px;margin:4px 0 8px}.sub{color:#475569;line-height:1.5}
+.card{background:#fff;border:1px solid #dbe3ef;border-radius:12px;padding:17px;margin:14px 0}
+.warning{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:12px;border-radius:9px;line-height:1.5}
+label{display:block;font-weight:700;margin:11px 0 5px}
+input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #b8c5d8;border-radius:8px;font-size:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;background:#155eef;color:white}
+button.secondary{background:#475569}button:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}
+th{background:#f8fafc}.pass{color:#067647;font-weight:700}.fail{color:#b42318;font-weight:700}.skip{color:#64748b}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f8fafc;border-radius:8px;padding:12px;font-size:12px}
+.small{font-size:12px;color:#64748b;line-height:1.45}
+.check{display:flex;align-items:flex-start;gap:9px;font-weight:400}.check input{width:auto;margin-top:3px}
+@media(max-width:700px){body{padding:10px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>MVIApps TEST — Remaining Stock/Godown Integration Checks</h1>
+<p class="sub">Reduced batch: runs only checks not yet evidenced as completed on the real TEST Worker. Previously completed transaction CRUD, base Godown creation/transfer, and direct D1 stale-version trigger test are not repeated as test cases.</p>
+
+<div class="warning"><b>TEST ENVIRONMENT ONLY.</b> This page is configured for the verified TEST Business and synthetic Item below. You must enter the exact TEST Worker URL from Cloudflare and confirm it is not Production. It creates temporary synthetic Stock Adjustment and Godown Transfer records to exercise PUT/DELETE; it attempts reverse-order cleanup. Do not close the page until the result and cleanup status appear. Do not run while another tester is changing this same Item.</div>
+
+<div class="card">
+<h2>1. TEST Connection</h2>
+<label for="worker">Exact TEST Worker base URL (required)</label>
+<input id="worker" type="url" placeholder="https://your-test-worker.workers.dev">
+<div class="grid">
+<div><label>Firebase project</label><input readonly value="mviapps-test-auth"></div>
+<div><label>Verified TEST Business ID</label><input readonly value="3832673a-6c73-4c0b-ad1f-b7e041e5f8df"></div>
+</div>
+<label for="email">TEST Owner email</label>
+<input id="email" type="email" autocomplete="username" placeholder="TEST Owner email">
+<label for="password">TEST Owner password</label>
+<input id="password" type="password" autocomplete="current-password" placeholder="TEST Owner password">
+<label class="check"><input id="confirmTest" type="checkbox"> I confirm the Worker URL above is the MVIApps TEST Worker, not the Production Worker, and no other test is using this synthetic Item.</label>
+<div class="actions">
+<button id="run">Sign in and run remaining checks</button>
+<button id="clear" class="secondary" type="button">Clear results</button>
+</div>
+<p class="small">Fixed test scope: Item <b>TEST-RETRY-ITEM-20261103-001</b>; Main Godown <b>legacy-main-3832673a-6c73-4c0b-ad1f-b7e041e5f8df</b>; Secondary Godown <b>TEST-GODOWN-20261102-001</b>. The run stops before writes unless the authenticated Worker, Item, Godowns and zero-stock preconditions all pass.</p>
+</div>
+
+<div class="card">
+<h2>2. Results</h2>
+<p id="summary" class="skip">Not started. No requests made.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Check</th><th>Expected</th><th>Result</th><th>Details</th></tr></thead><tbody id="results"><tr><td colspan="4">Waiting for test.</td></tr></tbody></table></div>
+<details style="margin-top:12px"><summary>Technical request/response log</summary><pre id="details">No requests made.</pre></details>
+</div>
+
+<div class="card">
+<h2>3. Included checks (not previously confirmed on real Worker)</h2>
+<ul>
+<li>Failed decrease against zero stock: source row, event count and stock state must remain unchanged.</li>
+<li>Exact duplicate POST retry with the same mutationId: must return alreadyApplied without a second event/version increment.</li>
+<li>Adjustment PUT recalculation: +2 PCS becomes +3 PCS.</li>
+<li>Transfer PUT recalculation: 2 PCS becomes 1 PCS.</li>
+<li>Transfer DELETE reversal, then Adjustment DELETE reversal.</li>
+<li>Final integrity: both Godown balances return to zero; expected six successful stock events only; no active adjustment/transfer references remain.</li>
+</ul>
+<p class="small"><b>Intentionally not included:</b> direct D1 Version Conflict test (already PASS); basic Purchase/Sale/Return/Adjustment/Transfer CRUD tests (already tested); multi-item invoice atomicity and true concurrent race testing (require separate invoice route/request-shape and coordinated parallel test design, so this page will not guess those payloads). HTTP 409 mapping was verified in Worker code; a stale version cannot be forced through this public route because the Worker loads the current snapshot and derives expectedVersion internally.</p>
+</div>
+</div>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyDF6iSPn_FLpvJFOHsNvfiBzvkUO57Q8PA",
+  authDomain:"mviapps-test-auth.firebaseapp.com",
+  projectId:"mviapps-test-auth",
+  storageBucket:"mviapps-test-auth.firebasestorage.app",
+  messagingSenderId:"490578513154",
+  appId:"1:490578513154:web:2eb4b08d71dadeacaf061b"
+};
+const BUSINESS="3832673a-6c73-4c0b-ad1f-b7e041e5f8df";
+const ITEM="TEST-RETRY-ITEM-20261103-001";
+const MAIN="legacy-main-3832673a-6c73-4c0b-ad1f-b7e041e5f8df";
+const SECONDARY="TEST-GODOWN-20261102-001";
+const DATE="2026-11-04";
+const auth=getAuth(initializeApp(firebaseConfig));
+const $=id=>document.getElementById(id);
+const state={base:"",headers:null,adjustment:null,transfer:null,baseVersion:0,baseEvents:0,details:[],rows:[],running:false};
+
+function reset(){
+ state.adjustment=null;state.transfer=null;state.headers=null;state.base="";state.baseVersion=0;state.baseEvents=0;state.details=[];state.rows=[];
+ $("summary").textContent="Not started. No requests made.";$("summary").className="skip";
+ $("results").innerHTML='<tr><td colspan="4">Waiting for test.</td></tr>';$("details").textContent="No requests made.";
+}
+$("clear").onclick=()=>{if(!state.running)reset();};
+function log(x){state.details.push(x);$("details").textContent=JSON.stringify(state.details,null,2);}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function render(){$("results").innerHTML=state.rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.expected)}</td><td class="${r.status==="PASS"?"pass":r.status==="FAIL"?"fail":"skip"}">${esc(r.status)}</td><td>${esc(r.detail)}</td></tr>`).join("")||'<tr><td colspan="4">No checks yet.</td></tr>';}
+function check(name,expected){const r={name,expected,status:"RUNNING",detail:""};state.rows.push(r);render();return {pass(d){r.status="PASS";r.detail=d||"";render();},fail(d){r.status="FAIL";r.detail=d||"";render();throw new Error(name+": "+d);}};}
+async function request(path,method="GET",body=null){
+ const response=await fetch(state.base+path,{method,headers:state.headers,body:body===null?undefined:JSON.stringify(body)});
+ const data=await response.json().catch(()=>({unparsed:true}));
+ log({method,path,httpStatus:response.status,response:data});
+ return {response,data};
+}
+const query=path=>path+"?businessId="+encodeURIComponent(BUSINESS);
+async function diagnostic(){
+ const x=await request("/business/data/items/archive-status?businessId="+encodeURIComponent(BUSINESS)+"&id="+encodeURIComponent(ITEM));
+ if(!x.response.ok||!x.data.found||x.data.archivedAt)throw new Error("Target TEST Item diagnostic failed, item missing or archived: HTTP "+x.response.status+" "+(x.data.code||x.data.error||""));
+ if(!x.data.stockState)throw new Error("Target Item has no initialized stockState.");
+ return x.data;
+}
+async function godownPreflight(){
+ const x=await request(query("/business/data/godowns"));
+ if(!x.response.ok||!Array.isArray(x.data.records))throw new Error("Godown list failed: HTTP "+x.response.status);
+ const ids=x.data.records.map(r=>String(r.id??r.record?.id??""));
+ if(!ids.includes(MAIN)||!ids.includes(SECONDARY))throw new Error("Expected active Main and Secondary Godowns not both found.");
+}
+function assertState(d,m,s,v){
+ const b=d.stockState.balances||{},actualM=Number(b[MAIN]||0),actualS=Number(b[SECONDARY]||0),actualV=Number(d.stockState.version);
+ if(Math.abs(actualM-m)>1e-9||Math.abs(actualS-s)>1e-9||actualV!==v)
+  throw new Error(`Stock mismatch: Main=${actualM}, Secondary=${actualS}, Version=${actualV}; expected ${m}, ${s}, ${v}.`);
+}
+function adjustment(id,qty,type="increase"){return {id,date:DATE,itemId:ITEM,itemName:"TEST RETRY STOCK ITEM 001",godownId:MAIN,adjustmentType:type,adjustmentQty:qty,reason:"Synthetic remaining integration checks only"};}
+function transfer(id,qty){return {id,date:DATE,itemId:ITEM,itemName:"TEST RETRY STOCK ITEM 001",fromGodownId:MAIN,toGodownId:SECONDARY,qty,note:"Synthetic remaining integration checks only"};}
+async function post(path,record,mutationId){return request(query(path),"POST",{businessId:BUSINESS,id:record.id,record,mutationId});}
+async function put(path,record,mutationId){return request(query(path),"PUT",{businessId:BUSINESS,id:record.id,record,mutationId});}
+async function del(path,id,mutationId){return request(query(path),"DELETE",{businessId:BUSINESS,id,mutationId});}
+async function cleanup(){
+ const notes=[];
+ if(state.transfer){const t=state.transfer;try{const x=await del("/business/data/godown-transfers",t.id,"mvi-cleanup-transfer-"+Date.now());if(x.response.ok&&x.data.deleted){notes.push("Transfer cleanup PASS");state.transfer=null;}else notes.push("TRANSFER CLEANUP FAILED; preserve ID "+t.id+"; HTTP "+x.response.status+" "+(x.data.code||x.data.error||""));}catch(e){notes.push("TRANSFER CLEANUP ERROR; preserve ID "+t.id+": "+e.message);}}
+ if(state.adjustment){const a=state.adjustment;try{const x=await del("/business/data/stock-adjustments",a.id,"mvi-cleanup-adjustment-"+Date.now());if(x.response.ok&&x.data.deleted){notes.push("Adjustment cleanup PASS");state.adjustment=null;}else notes.push("ADJUSTMENT CLEANUP FAILED; preserve ID "+a.id+"; HTTP "+x.response.status+" "+(x.data.code||x.data.error||""));}catch(e){notes.push("ADJUSTMENT CLEANUP ERROR; preserve ID "+a.id+": "+e.message);}}
+ return notes;
+}
+$("run").onclick=async()=>{
+ if(state.running)return;
+ state.running=true;$("run").disabled=true;reset();state.running=true;$("run").disabled=true;
+ let signedIn=false,failure=null;
+ try{
+  const base=$("worker").value.trim().replace(/\/+$/,"");
+  if(!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(base))throw new Error("Enter a valid HTTPS TEST Worker base URL.");
+  if(!$("confirmTest").checked)throw new Error("Tick the TEST-only confirmation before running.");
+  if(!/test|trial/i.test(base))throw new Error("Safety stop: Worker hostname must visibly contain 'test' or 'trial'. Confirm the exact TEST Worker URL; no requests were sent.");
+  state.base=base;
+  const credential=await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);signedIn=true;$("password").value="";
+  if(!credential.user.emailVerified)throw new Error("TEST Firebase Owner email is not verified.");
+  const token=await credential.user.getIdToken(true);
+  state.headers={"Authorization":"Bearer "+token,"X-MVIApps-Auth-Mode":"owner","Content-Type":"application/json","Accept":"application/json"};
+  const who=await fetch(state.base+"/whoami",{headers:state.headers});const whoData=await who.json().catch(()=>({}));
+  log({method:"GET",path:"/whoami",httpStatus:who.status,response:whoData});
+  if(!who.ok||whoData.authenticated!==true||whoData.emailVerified!==true)throw new Error("Worker /whoami did not confirm authenticated and verified TEST user.");
+  const pre=check("Preflight: TEST scope and zero-stock baseline","Verified owner; active Item and both Godowns; zero balances; no active adjustment/transfer references");
+  await godownPreflight();
+  let d=await diagnostic();const b=d.stockState.balances||{};
+  const sum=Object.values(b).reduce((n,v)=>n+Number(v||0),0);
+  if(sum!==0||Number(b[MAIN]||0)!==0||Number(b[SECONDARY]||0)!==0)throw new Error("Safety stop: target Item is not at zero stock.");
+  if(Number(d.activeAdjustmentReferences||0)!==0||Number(d.activeTransferReferences||0)!==0)throw new Error("Safety stop: existing active adjustment/transfer references found.");
+  state.baseVersion=Number(d.stockState.version);state.baseEvents=(d.stockEvents||[]).length;
+  pre.pass("Verified TEST Item; both Godowns active; Main=0, Secondary=0; baseline Version "+state.baseVersion+".");
+
+  const failed=check("Failed decrease rollback","Rejected request; no source row/event; state and version unchanged");
+  const badId="MVI-ROLLBACK-ADJ-"+Date.now(),badMutation="mvi-rollback-"+Date.now()+"-x";
+  const bad=await post("/business/data/stock-adjustments",adjustment(badId,1,"decrease"),badMutation);
+  if(bad.response.ok)throw new Error("Decrease against zero stock unexpectedly succeeded.");
+  if(![400,409].includes(bad.response.status))throw new Error("Unexpected failure status "+bad.response.status);
+  d=await diagnostic();assertState(d,0,0,state.baseVersion);
+  const badList=await request(query("/business/data/stock-adjustments"));
+  const found=Array.isArray(badList.data.records)&&badList.data.records.some(x=>String(x.id)===badId);
+  if(found||(d.stockEvents||[]).length!==state.baseEvents)throw new Error("Failed decrease left a source record or stock event.");
+  failed.pass("Rejected HTTP "+bad.response.status+" ("+(bad.data.code||bad.data.error||"expected stock rejection")+"); no source row/event; version unchanged.");
+
+  const aid="MVI-REMAIN-ADJ-"+Date.now(),amid="mvi-remain-adj-"+Date.now()+"-a";
+  state.adjustment={id:aid};
+  const setupAdj=check("Adjustment setup + exact duplicate retry","Create +2 once; identical retry returns alreadyApplied; only one event/version");
+  const ar=adjustment(aid,2);
+  const first=await post("/business/data/stock-adjustments",ar,amid);
+  if(!first.response.ok||first.data.saved!==true)throw new Error("Adjustment setup failed: HTTP "+first.response.status+" "+(first.data.code||first.data.error||""));
+  d=await diagnostic();assertState(d,2,0,state.baseVersion+1);
+  const retry=await post("/business/data/stock-adjustments",ar,amid);
+  if(!retry.response.ok||retry.data.stockCommit?.alreadyApplied!==true)throw new Error("Real Worker duplicate retry not recognized: HTTP "+retry.response.status+" "+(retry.data.code||retry.data.error||""));
+  d=await diagnostic();assertState(d,2,0,state.baseVersion+1);
+  if((d.stockEvents||[]).length!==state.baseEvents+1)throw new Error("Duplicate retry added an extra event.");
+  setupAdj.pass("Initial POST committed once; identical POST returned alreadyApplied=true; exactly one event and one version increment.");
+
+  const updAdj=check("Adjustment PUT recalculation","HTTP 200; Main=3; Version +2");
+  const ua=await put("/business/data/stock-adjustments",adjustment(aid,3),"mvi-remain-adj-update-"+Date.now()+"-b");
+  if(!ua.response.ok||ua.data.saved!==true)throw new Error("Adjustment PUT failed: HTTP "+ua.response.status+" "+(ua.data.code||ua.data.error||""));
+  d=await diagnostic();assertState(d,3,0,state.baseVersion+2);
+  updAdj.pass("Adjustment changed from +2 to +3; Main=3; Version "+d.stockState.version+".");
+
+  const tid="MVI-REMAIN-GT-"+Date.now();
+  state.transfer={id:tid};
+  const setupTransfer=check("Transfer setup","HTTP 201; Main=1, Secondary=2; Version +3");
+  const tr=await post("/business/data/godown-transfers",transfer(tid,2),"mvi-remain-gt-"+Date.now()+"-a");
+  if(!tr.response.ok||tr.data.saved!==true)throw new Error("Transfer setup failed: HTTP "+tr.response.status+" "+(tr.data.code||tr.data.error||""));
+  d=await diagnostic();assertState(d,1,2,state.baseVersion+3);
+  setupTransfer.pass("Temporary transfer created to exercise update/delete; Main=1, Secondary=2.");
+
+  const updTransfer=check("Transfer PUT recalculation","HTTP 200; Main=2, Secondary=1; Version +4");
+  const ut=await put("/business/data/godown-transfers",transfer(tid,1),"mvi-remain-gt-update-"+Date.now()+"-b");
+  if(!ut.response.ok||ut.data.saved!==true)throw new Error("Transfer PUT failed: HTTP "+ut.response.status+" "+(ut.data.code||ut.data.error||""));
+  d=await diagnostic();assertState(d,2,1,state.baseVersion+4);
+  updTransfer.pass("Transfer changed from 2 to 1; Main=2, Secondary=1.");
+
+  const delTransfer=check("Transfer DELETE reversal","HTTP 200; transfer reversed; Main=3, Secondary=0; Version +5");
+  const dt=await del("/business/data/godown-transfers",tid,"mvi-remain-gt-delete-"+Date.now()+"-c");
+  if(!dt.response.ok||dt.data.deleted!==true)throw new Error("Transfer DELETE failed: HTTP "+dt.response.status+" "+(dt.data.code||dt.data.error||""));
+  state.transfer=null;d=await diagnostic();assertState(d,3,0,state.baseVersion+5);
+  delTransfer.pass("Transfer soft-deleted and its stock effect reversed.");
+
+  const delAdj=check("Adjustment DELETE reversal","HTTP 200; both Godowns=0; Version +6");
+  const da=await del("/business/data/stock-adjustments",aid,"mvi-remain-adj-delete-"+Date.now()+"-c");
+  if(!da.response.ok||da.data.deleted!==true)throw new Error("Adjustment DELETE failed: HTTP "+da.response.status+" "+(da.data.code||da.data.error||""));
+  state.adjustment=null;d=await diagnostic();assertState(d,0,0,state.baseVersion+6);
+  if(Number(d.activeAdjustmentReferences||0)!==0||Number(d.activeTransferReferences||0)!==0)throw new Error("Active synthetic adjustment/transfer references remain.");
+  if((d.stockEvents||[]).length!==state.baseEvents+6)throw new Error("Expected exactly six successful new stock events.");
+  delAdj.pass("Adjustment soft-deleted; both balances zero; no active synthetic references.");
+
+  const final=check("Final stock/event integrity","Main=0; Secondary=0; Version baseline+6; six committed events");
+  final.pass("Main=0; Secondary=0; Version "+d.stockState.version+"; six new events; temporary records soft-deleted.");
+  $("summary").textContent="BATCH COMPLETE — all "+state.rows.length+" checks PASS. Temporary synthetic records were soft-deleted and stock returned to zero.";
+  $("summary").className="pass";
+ }catch(e){
+  failure=e;log({batchError:e.message||String(e)});
+  $("summary").textContent="BATCH STOPPED: "+(e.message||String(e))+". Automatic reverse-order cleanup will be attempted for any temporary records created.";
+  $("summary").className="fail";
+ }finally{
+  if(state.headers){
+   const notes=await cleanup();
+   if(notes.length)log({automaticCleanup:notes});
+   if(state.adjustment||state.transfer){
+    $("summary").textContent+=" CLEANUP NEEDS REVIEW. Do not rerun. Preserve the synthetic IDs and technical log.";
+    $("summary").className="fail";
+   }else if(failure){
+    $("summary").textContent+=" Cleanup attempted; review results and technical log before another run.";
+   }
+  }
+  if(signedIn){try{await signOut(auth);}catch{}}
+  $("password").value="";state.running=false;$("run").disabled=false;
+ }
+};
+</script>
+</body>
+</html>
