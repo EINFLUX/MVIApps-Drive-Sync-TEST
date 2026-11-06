@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MVIApps TEST — Four Transaction Heads Full CRUD</title>
+<style>
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#f4f7fb;color:#172033;margin:0;padding:18px}.wrap{max-width:1100px;margin:auto}h1{font-size:23px}.note{color:#475569;line-height:1.5}.card{background:#fff;border:1px solid #dbe3ef;border-radius:12px;padding:17px;margin:14px 0}label{display:block;font-weight:600;margin:11px 0 5px}input{width:100%;border:1px solid #b8c5d8;border-radius:8px;padding:10px;font-size:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}button{border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;background:#155eef;color:#fff}button:disabled{opacity:.55;cursor:wait}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}.warning{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px;color:#9a3412;line-height:1.5}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}th{background:#f8fafc}.pass{color:#067647;font-weight:700}.fail{color:#b42318;font-weight:700}.muted{color:#64748b}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f8fafc;padding:12px;border-radius:8px}@media(max-width:650px){body{padding:10px}.grid{grid-template-columns:1fr}}
+</style></head><body><div class="wrap">
+<h1>MVIApps TEST — Payment-In / Payment-Out / Expenses / Other Income</h1>
+<p class="note">One consolidated TEST-only run. For each of the four heads it performs Create → Read-back → Update → Read-back → second-business isolation check → Delete → confirm deleted. It does not edit or delete existing records.</p>
+<div class="warning"><b>TEST ONLY — SAFETY CHECK.</b> Use only the dedicated TEST Firebase owner account and TEST Worker. Never enter Production credentials or a Production URL. The test creates four synthetic records in the TEST database and attempts to delete only those exact IDs. Keep this page open until cleanup finishes. If cleanup fails, the synthetic ID is displayed for follow-up.</div>
+<div class="card">
+<h2>1. TEST owner login and business scope</h2>
+<label for="email">TEST Firebase email</label><input id="email" type="email" autocomplete="username" placeholder="Verified TEST Owner email">
+<label for="password">TEST Firebase password</label><input id="password" type="password" autocomplete="current-password" placeholder="TEST account password">
+<div class="grid"><div><label for="worker">Dedicated TEST Worker URL</label><input id="worker" value="https://mviapps-trial-test-api.mvi2k21.workers.dev"></div><div><label for="business">Owner TEST Business ID</label><input id="business" value="3832673a-6c73-4c0b-ad1f-b7e041e5f8df"></div></div>
+<label for="other">Second TEST Business ID (read-only isolation check)</label><input id="other" value="70d88197-2050-4e6c-a3d8-729164a7ed97">
+<p class="note">Please verify both IDs belong to TEST, not Production. The second ID is used only for a read-only GET. If the IDs are not confirmed, do not run.</p>
+<div class="actions"><button id="run">Sign in and run all 4 full CRUD tests</button><button id="clear" type="button" style="background:#475569">Clear results</button></div>
+</div>
+<div class="card"><h2>2. Consolidated results</h2><p id="summary" class="muted">Not started — no API requests made.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Head / route</th><th>Create</th><th>Read</th><th>Update</th><th>Isolation</th><th>Delete + verify</th><th>Synthetic ID / details</th></tr></thead><tbody id="results"><tr><td colspan="7" class="muted">Waiting for test.</td></tr></tbody></table></div>
+<details style="margin-top:12px"><summary>Sanitized technical details</summary><pre id="details">No requests made.</pre></details></div>
+<p class="note">This validates the deployed TEST Worker CRUD endpoints and tenant isolation. It does not by itself prove that the normal MVIApps screens, accounting calculations, reports, or localStorage-to-cloud adapter are integrated; those are separate UI/business-flow checks and will only be added if not already completed.</p>
+</div>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+const firebaseConfig={apiKey:"AIzaSyDF6iSPn_FLpvJFOHsNvfiBzvkUO57Q8PA",authDomain:"mviapps-test-auth.firebaseapp.com",projectId:"mviapps-test-auth",storageBucket:"mviapps-test-auth.firebasestorage.app",messagingSenderId:"490578513154",appId:"1:490578513154:web:2eb4b08d71dadeacaf061b"};
+const DEFAULT_WORKER="https://mviapps-trial-test-api.mvi2k21.workers.dev";
+const auth=getAuth(initializeApp(firebaseConfig)), $=id=>document.getElementById(id);
+const routes=[
+ {label:"Payment-In",path:"/business/data/payment-in",type:"payment_in"},
+ {label:"Payment-Out",path:"/business/data/payment-out",type:"payment_out"},
+ {label:"Expenses",path:"/business/data/expenses",type:"expense"},
+ {label:"Other Income",path:"/business/data/other-income",type:"other_income"}
+];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function reset(){ $("summary").textContent="Not started — no API requests made.";$("summary").className="muted";$("results").innerHTML='<tr><td colspan="7" class="muted">Waiting for test.</td></tr>';$("details").textContent="No requests made.";}
+$("clear").onclick=reset;
+$("run").onclick=async()=>{
+ const btn=$("run");btn.disabled=true;reset();
+ const base=$("worker").value.trim().replace(/\/+$/,""),business=$("business").value.trim(),other=$("other").value.trim();
+ const log=[];let totals={create:0,read:0,update:0,isolation:0,delete:0,fail:0};
+ const add=x=>{log.push(x);$("details").textContent=JSON.stringify(log,null,2)};
+ try{
+  if(base!==DEFAULT_WORKER)throw Error("Safety stop: URL must be the known dedicated TEST Worker.");
+  if(!/^[0-9a-f-]{36}$/i.test(business)||!/^[0-9a-f-]{36}$/i.test(other)||business===other)throw Error("Safety stop: enter two distinct valid TEST Business IDs.");
+  const credential=await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);
+  $("password").value="";
+  if(!credential.user.emailVerified)throw Error("TEST Firebase account email is not verified.");
+  const token=await credential.user.getIdToken(true);
+  const whoRes=await fetch(base+"/whoami",{headers:{Authorization:"Bearer "+token,Accept:"application/json"}});
+  const who=await whoRes.json().catch(()=>({}));
+  if(!whoRes.ok||who.authenticated!==true||who.emailVerified!==true)throw Error("TEST /whoami authentication check failed (HTTP "+whoRes.status+").");
+  const headers={Authorization:"Bearer "+token,"X-MVIApps-Auth-Mode":"owner","Content-Type":"application/json",Accept:"application/json"};
+  const readRecords=async(path,biz)=>{const r=await fetch(base+path+"?businessId="+encodeURIComponent(biz),{headers});const b=await r.json().catch(()=>({}));if(!r.ok||!Array.isArray(b.records))throw Error("GET HTTP "+r.status+" "+(b.code||b.error||"unexpected response"));return b.records;};
+  $("summary").textContent="Authenticated TEST owner. Running four transaction heads…";
+  for(const route of routes){
+   const id="MVI4HEAD_"+route.type.toUpperCase()+"_"+Date.now()+"_"+crypto.randomUUID().slice(0,8);
+   let create="NOT RUN",read="NOT RUN",update="NOT RUN",isolation="NOT RUN",del="NOT RUN",notes=[];
+   const row=document.createElement("tr");$("results").appendChild(row);
+   const paint=()=>{row.innerHTML=`<td>${esc(route.label)}<br><span class="muted">${esc(route.path)}</span></td>${[create,read,update,isolation,del].map(v=>`<td class="${v==="PASS"?"pass":v==="FAIL"?"fail":"muted"}">${esc(v)}</td>`).join("")}<td>${esc(notes.join("; ")||"—")}<br><span class="muted">ID: ${esc(id)}</span></td>`;};
+   let created=false;
+   try{
+    const record={id,recordNo:id,voucherNo:id,receiptNo:id,paymentNo:id,expenseNo:id,incomeNo:id,date:"06/11/2026",amount:1,total:1,description:"Synthetic TEST CRUD probe",notes:"MVIApps synthetic regression test only",testMarker:"MVIAPPS_TEST_ONLY",revision:"created"};
+    const post=await fetch(base+route.path+"?businessId="+encodeURIComponent(business),{method:"POST",headers,body:JSON.stringify({businessId:business,id,record})});
+    const pb=await post.json().catch(()=>({}));
+    if(post.ok&&pb.saved===true){create="PASS";created=true;totals.create++;notes.push("POST "+post.status);}else{create="FAIL";totals.fail++;notes.push("POST "+post.status+" "+(pb.code||pb.error||"unexpected response"));}paint();
+    if(created){
+     const records1=await readRecords(route.path,business);const found1=records1.find(x=>String(x.id)===id&&x.record&&x.record.testMarker==="MVIAPPS_TEST_ONLY"&&x.record.revision==="created");
+     if(found1){read="PASS";totals.read++;}else{read="FAIL";totals.fail++;notes.push("Created record not found in GET/read-back.");}paint();
+     const updated={...record,description:"Synthetic TEST CRUD probe — updated",revision:"updated",updatedMarker:"MVIAPPS_TEST_UPDATE"};
+     const put=await fetch(base+route.path+"?businessId="+encodeURIComponent(business),{method:"PUT",headers,body:JSON.stringify({businessId:business,id,record:updated})});
+     const ub=await put.json().catch(()=>({}));
+     if(put.ok&&ub.saved===true){const records2=await readRecords(route.path,business);const found2=records2.find(x=>String(x.id)===id&&x.record&&x.record.revision==="updated"&&x.record.updatedMarker==="MVIAPPS_TEST_UPDATE");if(found2){update="PASS";totals.update++;}else{update="FAIL";totals.fail++;notes.push("PUT accepted but updated value not found in read-back.");}}
+     else{update="FAIL";totals.fail++;notes.push("PUT "+put.status+" "+(ub.code||ub.error||"unexpected response"));}paint();
+     const cross=await fetch(base+route.path+"?businessId="+encodeURIComponent(other),{headers});
+     const cb=await cross.json().catch(()=>({}));
+     const leaked=Array.isArray(cb.records)&&cb.records.some(x=>String(x.id)===id||(x.record&&String(x.record.id)===id));
+     if(!leaked&&(cross.ok||cross.status===403||cross.status===404)){isolation="PASS";totals.isolation++;notes.push("Second business: no synthetic record exposed (HTTP "+cross.status+").");}
+     else{isolation="FAIL";totals.fail++;notes.push("Isolation HTTP "+cross.status+(leaked+" synthetic record exposed"||"unexpected response"));}paint();
+    }
+   }catch(e){totals.fail++;notes.push("Error: "+e.message);if(create==="NOT RUN")create="FAIL";paint();}
+   finally{
+    if(created){
+     try{
+      const d=await fetch(base+route.path+"?businessId="+encodeURIComponent(business),{method:"DELETE",headers,body:JSON.stringify({businessId:business,id})});
+      const db=await d.json().catch(()=>({}));
+      if(d.ok&&db.deleted===true){
+       const remaining=await readRecords(route.path,business);const stillThere=remaining.some(x=>String(x.id)===id);
+       if(!stillThere){del="PASS";totals.delete++;}else{del="FAIL";totals.fail++;notes.push("DELETE accepted but record remains visible.");}
+      }else{del="FAIL";totals.fail++;notes.push("DELETE "+d.status+" "+(db.code||db.error||"unexpected response")+" — retain ID for manual cleanup.");}
+     }catch(e){del="FAIL";totals.fail++;notes.push("Cleanup/verification error: "+e.message+" — retain ID for manual cleanup.");}
+    }else{del="NOT NEEDED";}
+    paint();add({head:route.label,path:route.path,id,create,readBack:read,update,secondBusinessIsolation:isolation,deleteAndVerify:del,notes});
+   }
+  }
+  const done=routes.length;
+  $("summary").textContent=`Completed ${done} heads. PASS counts — Create ${totals.create}/${done}, Read ${totals.read}/${done}, Update ${totals.update}/${done}, Isolation ${totals.isolation}/${done}, Delete+verify ${totals.delete}/${done}. Failed checks: ${totals.fail}.`;
+  $("summary").className=totals.fail===0&&Object.values(totals).slice(0,5).every(n=>n===done)?"pass":"fail";
+ }catch(e){$("summary").textContent="Test stopped before completion: "+e.message;$("summary").className="fail";}
+ finally{try{await signOut(auth)}catch{}$("password").value="";btn.disabled=false;}
+};
+</script></body></html>
