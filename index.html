@@ -2343,7 +2343,8 @@ function printDayBook(){
     <div class="count">${el.querySelector('.report-result-head>b')?.textContent?.trim()||''}</div>
   </div>
   ${table.outerHTML}
-  </body></html>`);
+  
+</body></html>`);
 
   win.document.close();
   win.focus();
@@ -8750,12 +8751,27 @@ function getGodownStock(){return JSON.parse(localStorage.getItem('mviapps_godown
 function saveGodownStock(a){localStorage.setItem('mviapps_godown_stock',JSON.stringify(a));}
 function godownManagement(){
 return `<div class="page-head"><div><h1>Godown Management</h1><p>Manage storage locations and track item-wise stock at each godown.</p></div></div>
-<section class="panel" style="margin:0 0 16px;border:1px solid #bfdbfe;background:#f8fbff">
+<section class="panel" id="mviappsProductionCloudGodownManager" style="margin:0 0 16px;border:1px solid #bfdbfe;background:#f8fbff">
  <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-  <div><b style="display:block;color:#1e3a8a">Production Cloud Godowns — Read Only</b><span style="font-size:12px;color:#475569">Checks authenticated Business scope and Godown master records. Does not create, edit, delete, or migrate records.</span></div>
-  <button type="button" class="btn secondary" id="mviappsProductionGodownsCheck" onclick="mviappsLoadProductionGodownsReadOnly()">Check Cloud Godowns</button>
+  <div><b style="display:block;color:#1e3a8a">Production Cloud Godowns</b><span style="font-size:12px;color:#475569">Business-scoped Cloud Godown master. This section writes only to Production Cloud; the existing Local Godown and Drive Sync data remain separate.</span></div>
+  <button type="button" class="btn secondary" id="mviappsCloudGodownRefresh" onclick="mviappsCloudGodownLoad()">Refresh Cloud Godowns</button>
  </div>
- <div id="mviappsProductionGodownsStatus" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;color:#475569">Not checked yet. Select “Check Cloud Godowns” after Owner or Staff sign-in.</div>
+ <div class="formgrid" style="margin-top:12px;grid-template-columns:1fr 1fr auto;align-items:end">
+  <div class="field"><label>Cloud Godown Name *</label><input id="mviappsCloudGodownName" class="input" maxlength="100" placeholder="e.g. Main Godown"></div>
+  <div class="field"><label>Location / Address</label><input id="mviappsCloudGodownLocation" class="input" maxlength="200" placeholder="Enter location"></div>
+  <div><button type="button" class="btn primary" id="mviappsCloudGodownCreate" onclick="mviappsCloudGodownCreate()">+ Add Cloud Godown</button></div>
+ </div>
+ <div id="mviappsCloudGodownStatus" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;color:#475569">Loading Cloud Godowns when this module opens…</div>
+ <div class="table-wrap" style="margin-top:10px"><table class="table"><thead><tr><th>Cloud Godown</th><th>Location</th><th>Cloud ID</th></tr></thead><tbody id="mviappsCloudGodownRows"><tr><td colspan="3" class="empty">Not loaded.</td></tr></tbody></table></div>
+</section>
+<section class="panel" id="mviappsProductionCloudStockOps" style="margin:0 0 16px;border:1px solid #bfdbfe;background:#f8fbff">
+ <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><b style="color:#1e3a8a">Production Cloud Stock Operations</b><div style="font-size:12px;color:#475569">Cloud-only stock transfers and adjustments. Existing Local transfer/adjustment forms and Drive Sync remain unchanged.</div></div><button type="button" class="btn secondary" id="mviappsCloudStockOpsRefresh">Refresh Cloud Stock History</button></div>
+ <div class="grid2" style="align-items:start;margin-top:12px">
+  <div class="panel" style="margin:0"><b>Cloud Stock Transfer</b><div class="formgrid" style="margin-top:10px"><div class="field"><label>Cloud Item *</label><select id="mcsotItem" class="select"><option value="">Select Cloud Item</option></select></div><div class="field"><label>Quantity *</label><input id="mcsotQty" class="input" type="number" min="0.001" step="0.001" value="1"></div><div class="field"><label>From Cloud Godown *</label><select id="mcsotFrom" class="select"><option value="">Select Source</option></select></div><div class="field"><label>To Cloud Godown *</label><select id="mcsotTo" class="select"><option value="">Select Destination</option></select></div><div class="field"><label>Date *</label><input id="mcsotTransferDate" class="input" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div class="field"><label>Reference / Note</label><input id="mcsotTransferNote" class="input" maxlength="500" placeholder="Optional note"></div></div><button type="button" class="btn primary" id="mcsotTransferSave" style="margin-top:10px">Create Cloud Transfer</button></div>
+  <div class="panel" style="margin:0"><b>Cloud Stock Adjustment</b><div class="formgrid" style="margin-top:10px"><div class="field"><label>Cloud Godown *</label><select id="mcsoaGodown" class="select"><option value="">Select Godown</option></select></div><div class="field"><label>Cloud Item *</label><select id="mcsoaItem" class="select"><option value="">Select Item</option></select></div><div class="field"><label>Adjustment Type *</label><select id="mcsoaType" class="select"><option value="increase">Increase</option><option value="decrease">Decrease</option></select></div><div class="field"><label>Quantity *</label><input id="mcsoaQty" class="input" type="number" min="0.001" step="0.001" value="1"></div><div class="field"><label>Date *</label><input id="mcsoaDate" class="input" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div class="field"><label>Reason / Remark</label><input id="mcsoaReason" class="input" maxlength="500" placeholder="Reason for adjustment"></div></div><button type="button" class="btn primary" id="mcsoaSave" style="margin-top:10px">Create Cloud Adjustment</button></div>
+ </div>
+ <div id="mviappsCloudStockOpsStatus" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;color:#475569">Loading Cloud Items, Godowns and stock history…</div>
+ <div class="grid2" style="align-items:start;margin-top:12px"><div><b>Cloud Transfers</b><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Item</th><th>From → To</th><th>Qty</th><th>Reference</th></tr></thead><tbody id="mcsotHistory"><tr><td colspan="5" class="empty">Not loaded.</td></tr></tbody></table></div></div><div><b>Cloud Adjustments</b><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Item</th><th>Godown</th><th>Type</th><th>Qty</th><th>Reason</th></tr></thead><tbody id="mcsoaHistory"><tr><td colspan="6" class="empty">Not loaded.</td></tr></tbody></table></div></div></div>
 </section>
 <div class="grid2" style="align-items:start;grid-template-columns:0.8fr 1.8fr">
 <div class="panel"><div class="section" style="margin-top:0">Manage Godown</div><div class="formgrid"><div class="field"><label>Godown Name *</label><input id="godownName" class="input" placeholder="e.g. Main Godown"></div><div class="field"><label>Location / Address</label><input id="godownLocation" class="input" placeholder="Enter location"></div></div><div style="margin-top:12px"><button class="btn" onclick="saveGodown()">+ Add Godown</button></div><div class="table-wrap" style="margin-top:16px"><table class="table"><thead><tr><th>Godown</th><th>Location</th><th>Action</th></tr></thead><tbody id="godownRows"></tbody></table></div></div>
@@ -10977,6 +10993,21 @@ window.mviappsLoadProductionPartyReadOnly=run;
 })();
 </script>
 
+
+<script id="mviapps-production-cloud-godown-live-v1">
+(function(){
+ 'use strict';
+ const $=id=>document.getElementById(id);
+ const bridge=()=>{const b=window.mviappsCloudBusinessData;if(!b||typeof b.readAll!=='function'||typeof b.create!=='function')throw new Error('Production Cloud Business Data bridge unavailable. Please sign in again.');return b;};
+ const say=(m,bad=false)=>{const e=$('mviappsCloudGodownStatus');if(e){e.textContent=m;e.style.color=bad?'#b91c1c':'#166534';}};
+ function makeId(){return 'gd-'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));}
+ function mutationId(){return 'godown-create-'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));}
+ async function load(){const b=$('mviappsCloudGodownRefresh');if(b)b.disabled=true;say('Loading authenticated Production Cloud Godowns…');try{const r=await bridge().readAll('godowns',{pageSize:200,maxPages:10});const rows=$('mviappsCloudGodownRows');if(rows)rows.innerHTML=r.records.length?r.records.map(x=>{const g=x.record||{};const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));return `<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.location||'—')}</td><td><small>${esc(x.id)}</small></td></tr>`;}).join(''):'<tr><td colspan="3" class="empty">No Cloud Godowns found.</td></tr>';say(`${r.records.length} Production Cloud Godown(s) loaded.${r.complete?'':' More records may remain; refresh after review.'}`);}catch(e){say('Cloud Godown load failed: '+(e.message||String(e)),true);}finally{if(b)b.disabled=false;}}
+ async function create(){const btn=$('mviappsCloudGodownCreate');if(btn)btn.disabled=true;try{const name=String($('mviappsCloudGodownName')?.value||'').trim(),location=String($('mviappsCloudGodownLocation')?.value||'').trim();if(!name)throw new Error('Cloud Godown Name is required.');const existing=await bridge().readAll('godowns',{pageSize:200,maxPages:10});if(existing.records.some(x=>String(x.record?.name||'').trim().toLowerCase()===name.toLowerCase()))throw new Error('A Cloud Godown with this name already exists.');const id=makeId();await bridge().create('godowns',{id,name,location,createdAt:new Date().toISOString().slice(0,10)},mutationId());$('mviappsCloudGodownName').value='';$('mviappsCloudGodownLocation').value='';say('Cloud Godown created successfully. Refreshing the Cloud list…');await load();}catch(e){say('Cloud Godown was not created: '+(e.message||String(e)),true);}finally{if(btn)btn.disabled=false;}}
+ window.mviappsCloudGodownLoad=load;window.mviappsCloudGodownCreate=create;
+ const observer=new MutationObserver(()=>{if($('mviappsProductionCloudGodownManager')&&!$('mviappsProductionCloudGodownManager').dataset.loaded){$('mviappsProductionCloudGodownManager').dataset.loaded='1';load();}});observer.observe(document.body,{childList:true,subtree:true});
+})();
+</script>
 </body></html>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{ try{mviappsBindBankModeSelector();}catch(e){} });
@@ -11238,4 +11269,24 @@ document.addEventListener('keydown',function(e){
  };
 })();
 
+</script>
+<script id="mviapps-production-cloud-stock-ops-v1">
+(function(){
+ 'use strict';
+ const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const bridge=()=>{const b=window.mviappsCloudBusinessData;if(!b?.readAll)throw Error('Production Cloud data bridge unavailable.');return b;};
+ const cloud=()=>{const c=window.mviappsProductionCloud;if(!c?.businessDataRequest)throw Error('Production Cloud API unavailable.');return c;};
+ const mid=p=>p+'-'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
+ let masters={items:[],godowns:[]};
+ function status(t,bad=false){const e=$('mviappsCloudStockOpsStatus');if(e){e.textContent=t;e.style.color=bad?'#b91c1c':'#166534';}}
+ function opts(rows,placeholder){return '<option value="">'+placeholder+'</option>'+rows.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.record?.name||x.record?.code||x.id)+'</option>').join('');}
+ async function getRows(route){let offset=0,out=[];for(let p=0;p<10;p++){const r=await cloud().businessDataRequest(route+'?limit=100&offset='+offset,{method:'GET'});if(!Array.isArray(r.records))throw Error('Invalid response from '+route);out.push(...r.records);if(r.records.length<100)return out;offset+=r.records.length;}throw Error('Cloud history exceeds the supported page limit; no write was sent.');}
+ function renderHistory(transfers,adjustments){$('mcsotHistory').innerHTML=transfers.length?transfers.map(x=>{const r=x.record||{};return `<tr><td>${esc(r.date)}</td><td>${esc(masters.items.find(i=>i.id===r.itemId)?.record?.name||r.itemId)}</td><td>${esc(masters.godowns.find(g=>g.id===r.fromGodownId)?.record?.name||r.fromGodownId)} → ${esc(masters.godowns.find(g=>g.id===r.toGodownId)?.record?.name||r.toGodownId)}</td><td>${esc(r.qty)}</td><td>${esc(r.note||'—')}</td></tr>`;}).join(''):'<tr><td colspan="5" class="empty">No Cloud transfers.</td></tr>';
+ $('mcsoaHistory').innerHTML=adjustments.length?adjustments.map(x=>{const r=x.record||{};return `<tr><td>${esc(r.date)}</td><td>${esc(masters.items.find(i=>i.id===r.itemId)?.record?.name||r.itemId)}</td><td>${esc(masters.godowns.find(g=>g.id===r.godownId)?.record?.name||r.godownId)}</td><td>${esc(r.adjustmentType)}</td><td>${esc(r.adjustmentQty??r.qty)}</td><td>${esc(r.reason||'—')}</td></tr>`;}).join(''):'<tr><td colspan="6" class="empty">No Cloud adjustments.</td></tr>';}
+ async function refresh(){status('Loading authenticated Production Cloud Items, Godowns and stock history…');const [i,g,t,a]=await Promise.all([bridge().readAll('items',{pageSize:100,maxPages:20}),bridge().readAll('godowns',{pageSize:100,maxPages:20}),getRows('/business/data/godown-transfers'),getRows('/business/data/stock-adjustments')]);if(!i.complete||!g.complete)throw Error('Cloud Item/Godown lists are incomplete. Refresh before creating stock operations.');masters={items:i.records,godowns:g.records};$('mcsotItem').innerHTML=opts(masters.items,'Select Cloud Item');$('mcsoaItem').innerHTML=opts(masters.items,'Select Cloud Item');$('mcsotFrom').innerHTML=opts(masters.godowns,'Select Source');$('mcsotTo').innerHTML=opts(masters.godowns,'Select Destination');$('mcsoaGodown').innerHTML=opts(masters.godowns,'Select Godown');renderHistory(t,a);status(`Cloud Stock Operations loaded: ${masters.items.length} Items, ${masters.godowns.length} Godowns, ${t.length} Transfers, ${a.length} Adjustments.`);}
+ async function saveTransfer(){const btn=$('mcsotTransferSave');btn.disabled=true;try{const itemId=$('mcsotItem').value,fromGodownId=$('mcsotFrom').value,toGodownId=$('mcsotTo').value,qty=Number($('mcsotQty').value),date=$('mcsotTransferDate').value,note=$('mcsotTransferNote').value.trim();if(!masters.items.some(x=>x.id===itemId)||!masters.godowns.some(x=>x.id===fromGodownId)||!masters.godowns.some(x=>x.id===toGodownId))throw Error('Select an existing Cloud Item and two Cloud Godowns.');if(fromGodownId===toGodownId||!Number.isFinite(qty)||qty<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||note.length>500)throw Error('Enter distinct Godowns, positive quantity and valid date.');const id='gtr-'+crypto.randomUUID();const record={id,date,itemId,qty,fromGodownId,toGodownId,note};await cloud().businessDataRequest('/business/data/godown-transfers',{method:'POST',id,record,mutationId:mid('cloud-godown-transfer')});status('Cloud Stock Transfer committed. Refreshing history…');$('mcsotTransferNote').value='';await refresh();}catch(e){status('Cloud transfer not saved: '+(e.message||String(e)),true);}finally{btn.disabled=false;}}
+ async function saveAdjustment(){const btn=$('mcsoaSave');btn.disabled=true;try{const itemId=$('mcsoaItem').value,godownId=$('mcsoaGodown').value,adjustmentType=$('mcsoaType').value,adjustmentQty=Number($('mcsoaQty').value),date=$('mcsoaDate').value,reason=$('mcsoaReason').value.trim();if(!masters.items.some(x=>x.id===itemId)||!masters.godowns.some(x=>x.id===godownId))throw Error('Select an existing Cloud Item and Cloud Godown.');if(!Number.isFinite(adjustmentQty)||adjustmentQty<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||reason.length>500)throw Error('Enter positive quantity, valid date and reason up to 500 characters.');const id='adj-'+crypto.randomUUID();const record={id,date,itemId,godownId,adjustmentType,adjustmentQty,reason};await cloud().businessDataRequest('/business/data/stock-adjustments',{method:'POST',id,record,mutationId:mid('cloud-stock-adjustment')});status('Cloud Stock Adjustment committed. Refreshing history…');$('mcsoaReason').value='';await refresh();}catch(e){status('Cloud adjustment not saved: '+(e.message||String(e)),true);}finally{btn.disabled=false;}}
+ function bind(){if(!$('mviappsProductionCloudStockOps')||$('mviappsProductionCloudStockOps').dataset.bound)return;$('mviappsProductionCloudStockOps').dataset.bound='1';$('mviappsCloudStockOpsRefresh').onclick=()=>refresh().catch(e=>status(e.message||String(e),true));$('mcsotTransferSave').onclick=saveTransfer;$('mcsoaSave').onclick=saveAdjustment;refresh().catch(e=>status('Cloud Stock Operations could not load: '+(e.message||String(e)),true));}
+ const observer=new MutationObserver(bind);observer.observe(document.body,{childList:true,subtree:true});bind();
+})();
 </script>
