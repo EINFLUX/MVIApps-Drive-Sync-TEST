@@ -5342,10 +5342,19 @@ function mviappsRequireStaffPermission(module,action){
   if(!allowed){alert('Access denied: your Staff account does not have '+module+'.'+action+' permission.');return false;}
   return true;
 }
-function openPartyForm(){if(!mviappsRequireStaffPermission('parties','create'))return;document.getElementById('party-form-panel').style.display='block'}
+function mviappsIsProductionCloudPartyOnly(){
+  const identity=window.mviappsProductionCloud?.getIdentity?.();
+  return !!(identity && identity.business && identity.business.id);
+}
+function openPartyForm(){
+  if(!mviappsRequireStaffPermission('parties','create'))return;
+  if(mviappsIsProductionCloudPartyOnly()){mviappsOpenCloudPartyWorkspace();return;}
+  const panel=document.getElementById('party-form-panel');if(panel)panel.style.display='block';
+}
 function closePartyForm(){document.getElementById('party-form-panel').style.display='none'}
 function togglePartyForm(){
   if(!mviappsRequireStaffPermission('parties','create'))return;
+  if(mviappsIsProductionCloudPartyOnly()){mviappsOpenCloudPartyWorkspace();return;}
   const panel=document.getElementById('party-form-panel');
   if(!panel)return;
   panel.style.display = panel.style.display==='none' ? 'block' : 'none';
@@ -5409,15 +5418,7 @@ function clearPartyForm(){
   });
 }
 function saveParty(){if(!mviappsRequireStaffPermission('parties','create'))return;
-/* Production policy: all newly-created Parties must be stored in the authenticated Cloud Business scope. Keep legacy LocalStorage Parties readable and editable, but never create new local Party records for a signed-in Production identity. */
-const productionIdentity=window.mviappsProductionCloud?.getIdentity?.();
-if(productionIdentity?.business?.id){
-  const panel=document.getElementById('party-form-panel');
-  if(panel){panel.style.display='none';}
-  try{window.mviappsOpenCloudPartyWorkspace?.();}catch(e){console.error('Cloud Party workspace could not open',e);}
-  alert('Production mein nayi Parties sirf Cloud mein banengi. Cloud Party Workspace mein New Cloud Party ka upyog karein. Purani Local Parties surakshit rahengi.');
-  return;
-}
+if(mviappsIsProductionCloudPartyOnly()){alert('Production rule: new Parties must be created in Cloud Party Workspace. No LocalStorage record was saved.');mviappsOpenCloudPartyWorkspace();return;}
 const panel=document.getElementById('party-form-panel'); if(!panel)return;
 const name=document.getElementById('partyName')?.value.trim();
 if(!name){alert('Please enter Party Name.');return}
@@ -9459,6 +9460,8 @@ function show(id,btn){ window._mviappsCurrentPage=id; window._mviappsCurrentBtn=
   if(!content)return;
   content.innerHTML=(id==='import-items'?importItemsPage():(id==='export-items'?exportItemsPage():(id==='plans-pricing'?`<div style="max-width:760px;margin:0 auto;padding:8px 0 24px"><div style="max-width:560px;margin:0 auto;padding:28px 22px;border:1px solid #dbe4ff;border-radius:16px;overflow:hidden;background:radial-gradient(circle at 90% 10%,#dbeafe 0,transparent 32%),linear-gradient(135deg,#ffffff,#eef2ff);box-shadow:0 10px 28px rgba(49,94,251,.12);text-align:center"><div style="width:54px;height:54px;margin:0 auto 14px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,#315efb,#7c3aed);color:white;font-size:27px;box-shadow:0 7px 16px rgba(49,94,251,.25)">₹</div><div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#315efb;margin-bottom:8px">MVIApps</div><h2 style="margin:0;color:#172554;font-size:clamp(22px,3vw,30px);line-height:1.2">Plans &amp; Pricing</h2><div style="width:58px;height:4px;border-radius:8px;background:#fbbf24;margin:15px auto"></div><div style="display:inline-block;padding:10px 18px;border-radius:999px;background:#fff1b8;color:#173b82;font-size:clamp(16px,2.4vw,21px);font-weight:850;box-shadow:0 3px 10px rgba(245,158,11,.12)">Will be available soon</div><p style="margin:13px 0 0;color:#64748b;font-size:12px">We’re preparing something useful for your business.</p></div></div>`:(id==='dashboard'?dashboard():(id==='bank-accounts'?bankAccountsPage():(id==='cash'?cashPage():(id==='sales-returns'?salesReturnPage():(p.html||''))))))));
   if(id==='party-details') setTimeout(()=>{
+    const form=document.getElementById('party-form-panel');
+    if(form && mviappsIsProductionCloudPartyOnly()) form.style.display='none';
     const button=document.getElementById('mviapps-add-party-button');
     if(button){
       const identity=window.mviappsProductionCloud?.getIdentity?.();
