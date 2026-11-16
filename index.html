@@ -5409,6 +5409,15 @@ function clearPartyForm(){
   });
 }
 function saveParty(){if(!mviappsRequireStaffPermission('parties','create'))return;
+/* Production policy: all newly-created Parties must be stored in the authenticated Cloud Business scope. Keep legacy LocalStorage Parties readable and editable, but never create new local Party records for a signed-in Production identity. */
+const productionIdentity=window.mviappsProductionCloud?.getIdentity?.();
+if(productionIdentity?.business?.id){
+  const panel=document.getElementById('party-form-panel');
+  if(panel){panel.style.display='none';}
+  try{window.mviappsOpenCloudPartyWorkspace?.();}catch(e){console.error('Cloud Party workspace could not open',e);}
+  alert('Production mein nayi Parties sirf Cloud mein banengi. Cloud Party Workspace mein New Cloud Party ka upyog karein. Purani Local Parties surakshit rahengi.');
+  return;
+}
 const panel=document.getElementById('party-form-panel'); if(!panel)return;
 const name=document.getElementById('partyName')?.value.trim();
 if(!name){alert('Please enter Party Name.');return}
