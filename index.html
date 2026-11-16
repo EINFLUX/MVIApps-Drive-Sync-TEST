@@ -5325,7 +5325,7 @@ function partyDetails(){
     </div>
     <section id="mviappsProductionPartyCloudPanel" class="panel" style="margin:12px 0;padding:14px;border:1px solid #bfdbfe;background:#f8fbff">
       <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-        <div><b style="display:block;color:#1e3a8a">Production Cloud Parties — Read Only</b>
+        <div><b style="display:block;color:#1e3a8a">Production Cloud Parties — Cloud Workspace</b>
           <span style="font-size:12px;color:#475569">Read-only check validates authenticated Business scope. Cloud CRUD opens separately; local Party records remain untouched.</span></div>
         <button type="button" class="btn secondary" onclick="mviappsLoadProductionPartyReadOnly()">Check Cloud Parties</button>
         <button type="button" class="btn primary" onclick="mviappsOpenCloudPartyWorkspace()">Open Cloud Party Workspace</button>
@@ -9925,7 +9925,7 @@ async function mviappsSaveStaffPermissions(userId){
  const permissions={};
  for(const [module,actions] of Object.entries(MVIAPPS_STAFF_PERMISSION_SCHEMA)){permissions[module]={};for(const action of actions){const cb=editor.querySelector('input[data-module="'+module+'"][data-action="'+action+'"]');permissions[module][action]=!!(cb&&cb.checked);}}
  const msg=document.getElementById('mviappsStaffPermissionMessage');
- try{await window.mviappsProductionCloud.staffAccountPermissionsSave({userId,permissions});if(msg)msg.textContent='Saved on TEST Worker. Staff must sign out and sign in again to refresh permissions.';}
+ try{await window.mviappsProductionCloud.staffAccountPermissionsSave({userId,permissions});if(msg)msg.textContent='Saved on Production Worker. Staff must sign out and sign in again to refresh permissions.';}
  catch(e){if(msg)msg.textContent='Save failed: '+(e.message||e);}
 }
 
