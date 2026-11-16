@@ -5667,17 +5667,9 @@ function getSortedItems(){
   );
 }
 function itemDetails(){
-return `<div class="page-head"><div style="display:flex;align-items:center;gap:12px"><button class="btn" onclick="show('add-item')">+ Add Item</button><div><h1>Item Details</h1><p>View, modify and manage all saved inventory items.</p></div></div></div>
-<div class="panel"><div class="toolbar"><input class="input" id="itemSearch" placeholder="Search item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()" style="min-width:140px;height:40px;box-sizing:border-box"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')} </select><div id="itemTotalCount" style="height:40px;min-width:140px;box-sizing:border-box;display:inline-flex;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);white-space:nowrap;font-weight:600">Total Items: <b style="margin-left:4px">0</b></div></div>
-<div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Item</th><th>Code</th><th>Unit</th><th>Purchase Rate</th><th>Sale Rate</th><th>Quantity</th><th>Stock Value</th><th>Action</th></tr></thead><tbody id="itemRows"></tbody></table></div></div>
-<section class="panel" style="margin-top:16px;border:1px solid #bfdbfe;background:#f8fbff">
- <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-  <div><b style="display:block;color:#1e3a8a">Production Cloud Items — Read Only</b><span style="font-size:12px;color:#475569">Checks authenticated Business scope, Item records and stock snapshot response. Does not copy, edit, or upload records.</span></div>
-  <button type="button" class="btn secondary" id="mviappsProductionItemsCheck" onclick="mviappsLoadProductionItemsReadOnly()">Check Cloud Items</button>
-  <button type="button" class="btn primary" id="mviappsOpenCloudItems" onclick="mviappsOpenCloudItemsWorkspace()">Open Cloud Items Workspace</button>
- </div>
- <div id="mviappsProductionItemsStatus" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;color:#475569">Not checked yet. Select “Check Cloud Items” after Owner or Staff sign-in.</div>
-</section>`;
+return `<div class="page-head"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn" onclick="show('add-item')">+ Add Local Item</button><button type="button" class="btn primary" id="mviappsOpenCloudItems" onclick="mviappsOpenCloudItemsWorkspace()">Open Production Cloud Items</button><div><h1>Item Details</h1><p>Manage existing local inventory separately from Production Cloud inventory.</p></div></div></div>
+<div class="panel"><div class="toolbar"><b style="color:#475569">Existing Local Items</b><input class="input" id="itemSearch" placeholder="Search local item..." oninput="renderItems()"><select class="select" id="itemCategorySearch" onchange="renderItems()" style="min-width:140px;height:40px;box-sizing:border-box"><option value="">All Categories</option>${getItemCategories().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')} </select><div id="itemTotalCount" style="height:40px;min-width:140px;box-sizing:border-box;display:inline-flex;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);white-space:nowrap;font-weight:600">Total Local Items: <b style="margin-left:4px">0</b></div></div>
+<div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Item</th><th>Code</th><th>Unit</th><th>Purchase Rate</th><th>Sale Rate</th><th>Quantity</th><th>Stock Value</th><th>Action</th></tr></thead><tbody id="itemRows"></tbody></table></div></div>`;
 }
 async function renderItems(){
 const rows=document.getElementById('itemRows');if(!rows)return;
