@@ -9901,7 +9901,7 @@ async function mviappsAddUser(){
   alert('Cloud Owner login is required to create Business Staff accounts.');
 }
 
-const MVIAPPS_STAFF_PERMISSION_SCHEMA={parties:['view','create','edit','delete'],items:['view','create','edit','delete'],godowns:['view','create','edit','delete'],stock:['view','create','edit','delete'],sales:['view','create','edit','delete'],purchases:['view','create','edit','delete'],expenses:['view','create','edit','delete'],payments:['view','create','edit','delete'],income:['view','create','edit','delete'],bankCash:['view','create','edit','delete'],reports:['view'],settings:['view'],testRecords:['read','write']};
+const MVIAPPS_STAFF_PERMISSION_SCHEMA={parties:['view','create','edit','delete'],items:['view','create','edit','delete'],godowns:['view','create','edit','delete'],stock:['view','create','edit','delete'],sales:['view','create','edit','delete'],purchases:['view','create','edit','delete'],expenses:['view','create','edit','delete'],payments:['view','create','edit','delete'],income:['view','create','edit','delete'],bankCash:['view','create','edit','delete'],reports:['view'],settings:['view']};
 async function mviappsEditStaffPermissions(userId){
  const box=document.getElementById('mviappsUserList');if(!box)return;
  let editor=document.getElementById('mviappsStaffPermissionEditor');
