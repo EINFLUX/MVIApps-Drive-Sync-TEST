@@ -10123,7 +10123,7 @@ html.mviapps-trial-locked #mviappsLoginOverlay{visibility:hidden!important;point
  // Explicit calls only: no localStorage/IndexedDB overwrite and no automatic cloud/local sync.
  // Stage 26 exposes Worker-supported non-stock accounting collections. Cash balance is read/create/update only.
  window.mviappsCloudPartiesItems=Object.freeze({list,readAll,create,update,remove,archiveStatus,archiveItem});
- window.mviappsCloudBusinessData=Object.freeze({list,readAll,create,update,remove,collections:Object.freeze(Object.keys(ROUTES)),canDelete:kind=>!['cashBalance','godowns','items'].includes(kind)});
+ window.mviappsCloudBusinessData=Object.freeze({list,readAll,create,update,remove,archiveStatus,collections:Object.freeze(Object.keys(ROUTES)),canDelete:kind=>!['cashBalance','godowns','items'].includes(kind)});
 })();
 </script>
 <script id="mviapps-stage27-accounting-cloud-preview">
