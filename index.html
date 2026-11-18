@@ -1916,6 +1916,8 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
       <button onclick="show('report-pos',this)">POS Sales</button>
       <div class="report-group-label">Other Income Report</div>
       <button onclick="show('report-other-income',this)">Other Income</button>
+      <div class="report-group-label">Production Cloud</div>
+      <button onclick="show('report-cloud-readonly',this)">Cloud Reports — Read Only</button>
     </div></div>
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon utilities">⚒</span>Utilities <span class="chev">⌄</span></button><div class="sub">
       <button onclick="show('import-items',this)">Import Items</button><button onclick="show('export-items',this)">Export Items</button>
@@ -4321,6 +4323,19 @@ function printMVIBarcodeLabels(){
   w.focus();
 }
 
+function cloudReportsPage(){
+  const b=getFinancialYearBounds(getSelectedFinancialYear());
+  const from=b.from||'',to=b.to||'';
+  return `<div class="page-head"><div><div class="report-kicker">Production Cloud</div><h1>Cloud Reports — Read Only</h1><p>Checks tenant-scoped Cloud report source records. Does not read LocalStorage or modify any record.</p></div></div>
+  <section class="panel" style="border:1px solid #bfdbfe;background:#f8fbff">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h3 style="margin:0;color:#1e3a8a">Production Cloud Report Source Check</h3><p style="margin:5px 0 0;color:var(--muted);font-size:12px">One consolidated read-only check for Transactions, Parties, Stock, Bank/Cash and Accounting Journal.</p></div><span class="badge">Read Only</span></div>
+    <div class="toolbar" style="align-items:end;margin-top:14px;gap:12px"><div><label class="label">From Date</label><input id="mviCloudReportsFrom" class="input" type="date" value="${from}"></div><div><label class="label">To Date</label><input id="mviCloudReportsTo" class="input" type="date" value="${to}"></div><button id="mviCloudReportsRun" class="btn" type="button" onclick="mviappsRunCloudReportsReadOnly()">Check Cloud Report Sources</button></div>
+    <p id="mviCloudReportsStatus" style="margin:12px 0 0;color:var(--muted);font-size:12px">Not checked yet. Select a date range and run the consolidated Cloud read.</p>
+  </section>
+  <section class="panel"><h3>Cloud Source Results</h3><div id="mviCloudReportsResults" class="empty" style="padding:22px;text-align:center">No Cloud report source check has been run.</div></section>
+  <p class="report-note">This is a source-availability diagnostic, not a financial statement. Existing report calculations remain unchanged and continue to use their current local data until each report is separately reconciled and approved for Cloud read-only rendering. POS Cloud reporting is not exposed by the current Worker API.</p>`;
+}
+
 const pages={
 dashboard:{title:"Dashboard",sub:"Business overview and quick actions",html:dashboard()},
 "party-details":{title:"Party Details",sub:"Manage customers and suppliers",html:partyDetails()},
@@ -4342,6 +4357,7 @@ purchase:{title:"Purchase",sub:"Record supplier purchases",html:invoice("Purchas
 expenses:{title:"Expenses",sub:"Record and manage business expenses",html:expensePage()},
 "purchase-returns":{title:"Purchase Returns",sub:"Manage purchase returns",html:invoice("Purchase Return")},"bank-accounts":{title:"Bank Accounts",sub:"Manage bank accounts and transactions",html:bankAccountsPage()},"payment-out":{title:"Payment-Out",sub:"Record supplier payments",html:payment("Payment-Out")},
 "payment-out":{title:"Payment-Out",sub:"Record supplier payments",html:payment("Payment-Out")},
+"report-cloud-readonly":{title:"Cloud Reports — Read Only",sub:"Production Cloud report source diagnostics",html:cloudReportsPage()},
 "report-profit-loss":{title:"Profit & Loss",sub:"Transaction Report",html:profitLossReport()},
 "report-all-transactions":{title:"All Transactions",sub:"Transaction Report",html:allTransactionsReport()},
 "report-day-book":{title:"Day Book",sub:"Transaction Report",html:dayBookReport()},
@@ -9434,7 +9450,7 @@ function mviappsStaffPagePermission(id){
   'report-profit-loss':['reports','view'],'report-purchase':['reports','view'],
   'report-sale':['reports','view'],'report-sale-purchase-party':['reports','view'],
   'report-stock-details':['reports','view'],'report-stock-summary':['reports','view'],
-  'report-stock-transfer-details':['reports','view']
+  'report-stock-transfer-details':['reports','view'],'report-cloud-readonly':['reports','view']
  };
  return rules[id]||null;
 }
@@ -10051,6 +10067,8 @@ html.mviapps-trial-locked #mviappsLoginOverlay{visibility:hidden!important;point
   parties:'/business/data/parties',
   items:'/business/data/items',
   godowns:'/business/data/godowns',
+  stockAdjustments:'/business/data/stock-adjustments',
+  godownTransfers:'/business/data/godown-transfers',
   salesInvoices:'/business/data/sales-invoices',
   salesReturns:'/business/data/sales-returns',
   purchaseInvoices:'/business/data/purchase-invoices',
@@ -11307,3 +11325,72 @@ document.addEventListener('keydown',function(e){
 })();
 </script>
 
+
+<script id="mviapps-production-cloud-reports-readonly">
+/* Consolidated Production Cloud Reports source check. GET-only; never reads local app storage. */
+(function(){
+ 'use strict';
+ const SOURCES=[
+  {group:'Transactions',kind:'salesInvoices',label:'Sales Invoices'},
+  {group:'Transactions',kind:'salesReturns',label:'Sales Returns'},
+  {group:'Transactions',kind:'purchaseInvoices',label:'Purchase Invoices'},
+  {group:'Transactions',kind:'purchaseReturns',label:'Purchase Returns'},
+  {group:'Transactions',kind:'paymentIn',label:'Payment-In'},
+  {group:'Transactions',kind:'paymentOut',label:'Payment-Out'},
+  {group:'Transactions',kind:'expenses',label:'Expenses'},
+  {group:'Transactions',kind:'otherIncome',label:'Other Income'},
+  {group:'Parties',kind:'parties',label:'Parties'},
+  {group:'Stock / Item',kind:'items',label:'Items'},
+  {group:'Stock / Item',kind:'godowns',label:'Godowns'},
+  {group:'Stock / Item',kind:'stockAdjustments',label:'Stock Adjustments'},
+  {group:'Stock / Item',kind:'godownTransfers',label:'Godown Transfers'},
+  {group:'Bank / Cash',kind:'bankAccounts',label:'Bank Accounts'},
+  {group:'Bank / Cash',kind:'bankTransactions',label:'Bank Transactions'},
+  {group:'Bank / Cash',kind:'cashTransactions',label:'Cash Transactions'},
+  {group:'Bank / Cash',kind:'cashBalance',label:'Cash Balance'}
+ ];
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ function recordDate(record){const r=record||{};for(const k of ['date','postingDate','transferDate','adjustmentDate','invoiceDate','entryDate']){const v=String(r[k]??'').slice(0,10);if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v;}return '';}
+ async function limitedMap(items,limit,fn){const out=new Array(items.length);let next=0;const workers=Array.from({length:Math.min(limit,items.length)},async()=>{while(true){const i=next++;if(i>=items.length)return;try{out[i]=await fn(items[i]);}catch(e){out[i]={error:String(e?.message||e)};}}});await Promise.all(workers);return out;}
+ function setStatus(message,isError=false){const el=document.getElementById('mviCloudReportsStatus');if(el){el.textContent=message;el.style.color=isError?'#b91c1c':'#047857';}}
+ function render(results,journal,allocations,from,to){
+  const root=document.getElementById('mviCloudReportsResults');if(!root)return;
+  const groups=['Transactions','Parties','Stock / Item','Bank / Cash'];let html='';
+  for(const group of groups){const rows=results.filter(x=>x.group===group);html+=`<section style="margin:14px 0 20px"><h3 style="margin:0 0 8px">${esc(group)}</h3><div class="table-wrap"><table class="table"><thead><tr><th>Cloud Source</th><th>Total Records</th><th>In Selected Date Range</th><th>Undated / Not Applicable</th><th>Status</th></tr></thead><tbody>`;
+   for(const x of rows){if(x.error){html+=`<tr><td>${esc(x.label)}</td><td>—</td><td>—</td><td>—</td><td style="color:#b91c1c">ERROR: ${esc(x.error)}</td></tr>`;continue;}const dated=x.records.filter(y=>recordDate(y.record));const inRange=dated.filter(y=>{const d=recordDate(y.record);return d>=from&&d<=to;}).length;const na=x.records.length-dated.length;html+=`<tr><td>${esc(x.label)}</td><td>${x.records.length}</td><td>${dated.length?inRange:'—'}</td><td>${na||'—'}</td><td>${x.complete?'PASS':'PARTIAL — read limit reached'}</td></tr>`;}
+   html+='</tbody></table></div></section>';
+  }
+  html+=`<section style="margin:14px 0 20px"><h3>Payment Allocations</h3>`;
+  if(allocations.error)html+=`<p style="color:#b91c1c">Not available: ${esc(allocations.error)}</p>`;
+  else html+=`<p>Read-only allocation events (all dates): <b>${allocations.events.length}</b></p>`;
+  html+='</section>';
+  html+=`<section style="margin:14px 0 20px"><h3>Accounting Journal</h3>`;
+  if(journal.error)html+=`<p style="color:#b91c1c">Not available: ${esc(journal.error)}</p>`;
+  else html+=`<p>Read-only journal lines: <b>${journal.lines.length}</b> · Debits: <b>${esc(journal.totals?.debitsPaise??0)} paise</b> · Credits: <b>${esc(journal.totals?.creditsPaise??0)} paise</b></p>`;
+  html+='</section>';
+  html+=`<div style="padding:12px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;color:#92400e;font-size:12px"><b>Scope note:</b> These counts confirm Cloud source availability only. They do not yet certify report calculations. POS Sales has no dedicated Cloud POS collection/route in the inspected Production Worker. No local records were read or changed.</div>`;
+  root.innerHTML=html;
+ }
+ window.mviappsRunCloudReportsReadOnly=async function(){
+  const button=document.getElementById('mviCloudReportsRun');if(button)button.disabled=true;
+  const from=document.getElementById('mviCloudReportsFrom')?.value||'',to=document.getElementById('mviCloudReportsTo')?.value||'';
+  try{
+   if(!from||!to||from>to)throw new Error('Please select a valid From Date and To Date.');
+   const cloud=window.mviappsProductionCloud,bridge=window.mviappsCloudBusinessData;
+   if(!cloud?.businessDataRequest||!bridge?.readAll)throw new Error('Production Cloud session or read-only data bridge is unavailable. Please sign in again.');
+   const identity=cloud.getIdentity?.();if(!identity?.business?.id)throw new Error('Authenticated Business scope is missing.');
+   setStatus('Reading Production Cloud report sources…');
+   const results=await limitedMap(SOURCES,3,async source=>{const r=await bridge.readAll(source.kind,{pageSize:100,maxPages:10});return {...source,records:r.records||[],complete:r.complete===true};});
+   let journal={lines:[],totals:{}},allocations={events:[]};
+   try{journal=await cloud.businessDataRequest('/business/data/accounting-journal?from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to),{method:'GET'});if(!journal||!Array.isArray(journal.lines))throw new Error('Unexpected journal response shape');}
+   catch(e){journal={error:String(e?.message||e)};}
+   try{allocations=await cloud.businessDataRequest('/business/data/payment-allocations',{method:'GET'});if(!allocations||!Array.isArray(allocations.events))throw new Error('Unexpected allocation response shape');}
+   catch(e){allocations={error:String(e?.message||e)};}
+   const errors=results.filter(x=>x.error).length,partial=results.filter(x=>!x.error&&!x.complete).length;
+   render(results,journal,allocations,from,to);
+   setStatus((errors||partial||journal.error||allocations.error?'PARTIAL':'PASS')+' — '+(SOURCES.length-errors)+' of '+SOURCES.length+' Cloud collections read; '+(partial?partial+' reached the 1,000-record preview cap. ':'')+(journal.error?'Accounting Journal unavailable. ':'Accounting Journal read completed. ')+(allocations.error?'Payment Allocation history unavailable. ':'Payment Allocation history read completed. ')+'No Cloud or Local records were changed.',!!(errors||partial||journal.error||allocations.error));
+  }catch(e){setStatus(e?.message||String(e),true);const root=document.getElementById('mviCloudReportsResults');if(root)root.textContent='Cloud report source check failed. No records were changed.';}
+  finally{if(button)button.disabled=false;}
+ };
+})();
+</script>
