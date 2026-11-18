@@ -11138,7 +11138,7 @@ window.mviappsLoadProductionPartyReadOnly=run;
    if(partyStatus)partyStatus.textContent='Party links checked: '+partyRefs+'; potentially unresolved: '+unresolved+'. This is a conservative field-name heuristic and requires manual review; no links were changed.';
    const old=document.getElementById('mviappsDownloadLocalInventorySummary');if(old)old.remove();const dl=document.createElement('button');dl.type='button';dl.id='mviappsDownloadLocalInventorySummary';dl.className='btn secondary';dl.style.marginTop='10px';dl.textContent='Download Aggregate Inventory Summary (JSON)';dl.onclick=function(){const blob=new Blob([JSON.stringify(summary,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='MVIApps_Local_Data_Inventory_Summary.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};document.getElementById('mviappsLocalMigrationInventory')?.appendChild(dl);
   }catch(e){if(status)status.textContent='Inventory could not complete: '+(e?.message||String(e))+'. No data was changed.';}finally{if(button)button.disabled=false;}}
- document.addEventListener('DOMContentLoaded',()=>{const b=document.getElementById('mviappsRunLocalMigrationInventory');if(b)b.addEventListener('click',run);});
+ document.addEventListener('click',event=>{const b=event.target&&event.target.closest?event.target.closest('#mviappsRunLocalMigrationInventory'):null;if(!b)return;event.preventDefault();run();});
 })();
 </script>
 </body></html>
