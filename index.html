@@ -4633,7 +4633,20 @@ function dashboard(){
    </div>
    <div id="mviappsRemainingAuditSummary" role="status" aria-live="polite" style="margin:12px 0;color:#475569;font-size:12px">Not checked yet. Run this after Owner sign-in.</div>
    <div class="table-wrap"><table class="table"><thead><tr><th>Module / Route</th><th>Result</th><th>Records checked</th></tr></thead><tbody id="mviappsRemainingAuditRows"><tr><td colspan="3" class="empty">No checks run yet.</td></tr></tbody></table></div>
-  </section></div>`;
+  </section>
+
+  <section class="panel" id="mviappsCloudDashboardPreview" style="margin-top:18px;border:1px solid #cbd5e1">
+   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div><h3 style="margin:0 0 5px">Production Cloud — Dashboard Preview (Read Only)</h3>
+     <p style="margin:0;font-size:12px;color:var(--muted)">Compares Cloud and browser record counts only. It does not replace Dashboard amounts or calculate balances.</p></div>
+    <button type="button" class="btn secondary" id="mviappsRunCloudDashboardPreview" onclick="window.mviappsRunCloudDashboardPreview()">Check Cloud Dashboard Sources</button>
+   </div>
+   <div id="mviappsCloudDashboardPreviewStatus" role="status" aria-live="polite" style="margin:12px 0;font-size:12px;color:var(--muted)">Not checked yet. Run after Owner or authorized Staff sign-in.</div>
+   <div class="table-wrap"><table class="table"><thead><tr><th>Data Source</th><th>Cloud Records</th><th>Local Records</th><th>Read Status</th></tr></thead>
+    <tbody id="mviappsCloudDashboardPreviewRows"><tr><td colspan="4" class="empty">No Cloud reads have been run.</td></tr></tbody></table></div>
+   <p style="margin:12px 0 0;font-size:11px;color:var(--muted)">Receivable / Payable and monetary totals are intentionally withheld until Cloud ledger field mapping and accounting rules are reconciled. No Cloud or local records are written, imported, merged or deleted.</p>
+  </section>
+  </div>`;
 }
 function list(title,cols,button){return `<div class="page-head"><div><h1>${title}</h1><p>Search, filter and manage records.</p></div><button class="btn">${button}</button></div><div class="panel"><div class="toolbar"><input class="input" placeholder="Search..."><input class="input" type="date"><input class="input" type="date"><button class="btn secondary">Filter</button><button class="btn secondary">Export</button></div><div class="table-wrap"><table class="table"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}<th>Action</th></tr></thead><tbody><tr><td colspan="${cols.length+1}" class="empty">No records found.</td></tr></tbody></table></div></div>`}
 function partyLedger(){
@@ -11013,6 +11026,73 @@ window.mviappsLoadProductionPartyReadOnly=run;
   $('mcbPostOpening').onclick=postOpening;$('mcbTransfer').onclick=transfer;$('mcbRefresh').onclick=()=>refresh().catch(e=>say(status,e.message||String(e),true));
   try{await refresh();}catch(e){say(status,e?.message||'Cloud journal could not be loaded.',true);}
  }
+})();
+</script>
+
+
+<script id="mviapps-production-cloud-dashboard-preview-readonly">
+(function(){
+ 'use strict';
+ const SOURCES=[
+  {kind:'salesInvoices',label:'Sales Invoices',local:'mviapps_sales_invoices'},
+  {kind:'salesReturns',label:'Sales Returns',local:'mviapps_sales_returns'},
+  {kind:'purchaseInvoices',label:'Purchase Invoices',local:'mviapps_purchase_invoices'},
+  {kind:'purchaseReturns',label:'Purchase Returns',local:'mviapps_purchase_returns'},
+  {kind:'paymentIn',label:'Payment-In',local:'mviapps_payment_in'},
+  {kind:'paymentOut',label:'Payment-Out',local:'mviapps_payment_out'},
+  {kind:'expenses',label:'Expenses',local:'mviapps_expenses'},
+  {kind:'otherIncome',label:'Other Income',local:'mviapps_other_income'},
+  {kind:'parties',label:'Parties',local:'mviapps_parties'},
+  {kind:'bankAccounts',label:'Bank Accounts',local:null},
+  {kind:'bankTransactions',label:'Bank Transactions',local:null},
+  {kind:'cashTransactions',label:'Cash Transactions',local:null},
+  {kind:'cashBalance',label:'Cash Balance',local:null}
+ ];
+ function localCount(key){
+  if(!key)return '—';
+  try{const value=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(value)?String(value.length):'Invalid local data';}
+  catch(e){return 'Unreadable';}
+ }
+ function addCell(row,value){const cell=document.createElement('td');cell.textContent=String(value);row.appendChild(cell);}
+ async function run(){
+  const button=document.getElementById('mviappsRunCloudDashboardPreview');
+  const status=document.getElementById('mviappsCloudDashboardPreviewStatus');
+  const body=document.getElementById('mviappsCloudDashboardPreviewRows');
+  const bridge=window.mviappsCloudBusinessData;
+  if(button)button.disabled=true;
+  if(body)body.replaceChildren();
+  const say=value=>{if(status)status.textContent=value;};
+  const row=(label,cloudCount,local,readStatus)=>{
+   if(!body)return;
+   const tr=document.createElement('tr');
+   addCell(tr,label);addCell(tr,cloudCount);addCell(tr,local);addCell(tr,readStatus);
+   body.appendChild(tr);
+  };
+  try{
+   if(!bridge||typeof bridge.readAll!=='function')throw new Error('Production Cloud Business Data bridge is unavailable. Please sign in again.');
+   const identity=window.mviappsProductionCloud?.getIdentity?.();
+   if(!identity?.business?.id)throw new Error('No authenticated Business scope found. Sign in again.');
+   let passed=0,failed=0,total=0;
+   say('Authenticated Business scope found. Reading Cloud collections; no writes will be sent…');
+   for(const source of SOURCES){
+    try{
+     const result=await bridge.readAll(source.kind,{pageSize:100,maxPages:20});
+     const count=Array.isArray(result.records)?result.records.length:0;
+     const completeness=result.complete===true?'PASS':'PARTIAL — page cap reached';
+     row(source.label,count,localCount(source.local),completeness);
+     if(result.complete===true)passed++;else failed++;
+     total+=count;
+    }catch(error){
+     failed++;
+     row(source.label,'—',localCount(source.local),'READ FAILED — '+(error?.message||String(error)));
+    }
+   }
+   say('Finished: '+passed+' complete, '+failed+' partial/failed across '+SOURCES.length+' sources; '+total+' Cloud records read. Counts only — no financial totals or balances calculated.');
+  }catch(error){
+   say('Cloud preview could not start: '+(error?.message||String(error)));
+  }finally{if(button)button.disabled=false;}
+ }
+ window.mviappsRunCloudDashboardPreview=run;
 })();
 </script>
 
