@@ -4646,6 +4646,18 @@ function dashboard(){
     <tbody id="mviappsCloudDashboardPreviewRows"><tr><td colspan="4" class="empty">No Cloud reads have been run.</td></tr></tbody></table></div>
    <p style="margin:12px 0 0;font-size:11px;color:var(--muted)">Receivable / Payable and monetary totals are intentionally withheld until Cloud ledger field mapping and accounting rules are reconciled. No Cloud or local records are written, imported, merged or deleted.</p>
   </section>
+  <section class="panel" id="mviappsLocalMigrationInventory" style="margin-top:18px;border:1px solid #cbd5e1">
+   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div><h3 style="margin:0 0 5px">Local Data Migration Inventory (Read Only)</h3>
+     <p style="margin:0;font-size:12px;color:var(--muted)">Checks local record IDs, document references, dates and Party links. Only aggregate diagnostics are generated; raw records are not uploaded or exported.</p></div>
+    <button type="button" class="btn secondary" id="mviappsRunLocalMigrationInventory">Run Local Data Quality Check</button>
+   </div>
+   <div id="mviappsLocalMigrationInventoryStatus" role="status" aria-live="polite" style="margin:12px 0;font-size:12px;color:var(--muted)">Not checked yet. Run on the browser that contains your current MVIApps local data.</div>
+   <div class="table-wrap"><table class="table"><thead><tr><th>Local Collection</th><th>Records</th><th>Missing IDs</th><th>Duplicate IDs</th><th>Duplicate References</th><th>Missing Dates</th></tr></thead>
+    <tbody id="mviappsLocalMigrationInventoryRows"><tr><td colspan="6" class="empty">No local inventory has been run.</td></tr></tbody></table></div>
+   <p id="mviappsLocalMigrationInventoryPartyStatus" style="margin:12px 0 0;font-size:11px;color:var(--muted)">Party-link diagnostics will appear after the check. Potential unresolved links require review; they are not automatically repaired.</p>
+   <p style="margin:8px 0 0;font-size:11px;color:var(--muted)">Read-only: this check does not modify LocalStorage, IndexedDB, Cloud data or Google Drive Sync. It does not calculate or alter financial balances.</p>
+  </section>
   </div>`;
 }
 function list(title,cols,button){return `<div class="page-head"><div><h1>${title}</h1><p>Search, filter and manage records.</p></div><button class="btn">${button}</button></div><div class="panel"><div class="toolbar"><input class="input" placeholder="Search..."><input class="input" type="date"><input class="input" type="date"><button class="btn secondary">Filter</button><button class="btn secondary">Export</button></div><div class="table-wrap"><table class="table"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}<th>Action</th></tr></thead><tbody><tr><td colspan="${cols.length+1}" class="empty">No records found.</td></tr></tbody></table></div></div>`}
@@ -11096,6 +11108,39 @@ window.mviappsLoadProductionPartyReadOnly=run;
 })();
 </script>
 
+<script id="mviapps-production-local-migration-inventory-readonly">
+(function(){
+ 'use strict';
+ const COLLECTIONS=[
+  {key:'mviapps_parties',label:'Parties',ref:['name']},
+  {key:'mviapps_items',label:'Items',ref:['code','itemCode']},
+  {key:'mviapps_sales_invoices',label:'Sales Invoices',ref:['invoiceNo','number']},
+  {key:'mviapps_sales_returns',label:'Sales Returns',ref:['number','invoiceNo']},
+  {key:'mviapps_purchase_invoices',label:'Purchase Invoices',ref:['invoiceNo','number']},
+  {key:'mviapps_purchase_returns',label:'Purchase Returns',ref:['number','invoiceNo']},
+  {key:'mviapps_payment_in',label:'Payment-In',ref:['number','receiptNo']},
+  {key:'mviapps_payment_out',label:'Payment-Out',ref:['number','paymentNo']},
+  {key:'mviapps_expenses',label:'Expenses',ref:['number']},
+  {key:'mviapps_other_income',label:'Other Income',ref:['number','receiptNo']}
+ ];
+ const DATE_FIELDS=['date','invoiceDate','billDate','voucherDate','entryDate','createdAt'];
+ function read(key){try{const raw=localStorage.getItem(key);if(raw===null)return {records:[],error:'KEY_NOT_FOUND'};const value=JSON.parse(raw);return Array.isArray(value)?{records:value,error:null}:{records:[],error:'NOT_AN_ARRAY'};}catch(e){return {records:[],error:'INVALID_JSON'};}}
+ function firstValue(obj,fields){for(const f of fields){const v=obj?.[f];if(v!==undefined&&v!==null&&String(v).trim()!=='')return String(v).trim();}return '';}
+ function metrics(records,refFields){const ids=records.map(x=>String(x?.id??'').trim());const missingIds=ids.filter(x=>!x).length;const seenIds=new Set(),dupIds=new Set();ids.filter(Boolean).forEach(x=>{if(seenIds.has(x))dupIds.add(x);seenIds.add(x);});const refs=records.map(x=>firstValue(x,refFields)).filter(Boolean);const seenRefs=new Set(),dupRefs=new Set();refs.forEach(x=>{const k=x.toLowerCase();if(seenRefs.has(k))dupRefs.add(k);seenRefs.add(k);});const missingDates=records.filter(x=>!firstValue(x,DATE_FIELDS)).length;return {records:records.length,missingIds,duplicateIds:dupIds.size,duplicateReferences:dupRefs.size,missingDates};}
+ function addCell(row,value){const td=document.createElement('td');td.textContent=String(value);row.appendChild(td);}
+ function run(){const button=document.getElementById('mviappsRunLocalMigrationInventory'),status=document.getElementById('mviappsLocalMigrationInventoryStatus'),body=document.getElementById('mviappsLocalMigrationInventoryRows'),partyStatus=document.getElementById('mviappsLocalMigrationInventoryPartyStatus');if(button)button.disabled=true;if(body)body.replaceChildren();let total=0,missing=0,duplicates=0,dupRefs=0,missingDates=0,invalid=0;const data={};
+  try{
+   for(const c of COLLECTIONS){const parsed=read(c.key);if(parsed.error){invalid++;const tr=document.createElement('tr');addCell(tr,c.label);addCell(tr,parsed.error);addCell(tr,'—');addCell(tr,'—');addCell(tr,'—');addCell(tr,'—');body?.appendChild(tr);continue;}const m=metrics(parsed.records,c.ref);data[c.key]=parsed.records;total+=m.records;missing+=m.missingIds;duplicates+=m.duplicateIds;dupRefs+=m.duplicateReferences;missingDates+=m.missingDates;const tr=document.createElement('tr');addCell(tr,c.label);addCell(tr,m.records);addCell(tr,m.missingIds);addCell(tr,m.duplicateIds);addCell(tr,m.duplicateReferences);addCell(tr,m.missingDates);body?.appendChild(tr);}
+   const parties=data.mviapps_parties||[],partyIds=new Set(parties.map(x=>String(x?.id??'').trim()).filter(Boolean)),partyNames=new Set(parties.map(x=>String(x?.name??'').trim().toLowerCase()).filter(Boolean));let partyRefs=0,unresolved=0;
+   for(const key of ['mviapps_sales_invoices','mviapps_sales_returns','mviapps_purchase_invoices','mviapps_purchase_returns','mviapps_payment_in','mviapps_payment_out','mviapps_expenses','mviapps_other_income']){for(const r of data[key]||[]){const ref=firstValue(r,['partyId','customerId','supplierId','party','customer','supplier','partyName','customerName','supplierName']);if(!ref||/^(cash\s*\/\s*general|cash|general)$/i.test(ref))continue;partyRefs++;if(!partyIds.has(ref)&&!partyNames.has(ref.toLowerCase()))unresolved++;}}
+   const summary={generatedAt:new Date().toISOString(),readOnly:true,rawRecordsExported:false,collections:COLLECTIONS.map(c=>({key:c.key,label:c.label,...(data[c.key]?metrics(data[c.key],c.ref):{error:'NOT_AVAILABLE'})})),totals:{records:total,missingIds:missing,duplicateIds:duplicates,duplicateReferences:dupRefs,missingDates,unreadableCollections:invalid},partyLinks:{checkedReferences:partyRefs,potentiallyUnresolved:unresolved,method:'Matched candidate party reference values against local Party id or name; manual review required.'}};
+   if(status)status.textContent='Finished: '+COLLECTIONS.length+' collections checked; '+total+' records scanned. Missing IDs: '+missing+'; duplicate IDs: '+duplicates+'; duplicate document references: '+dupRefs+'; missing date values: '+missingDates+'; unreadable collections: '+invalid+'. No data was changed.';
+   if(partyStatus)partyStatus.textContent='Party links checked: '+partyRefs+'; potentially unresolved: '+unresolved+'. This is a conservative field-name heuristic and requires manual review; no links were changed.';
+   const old=document.getElementById('mviappsDownloadLocalInventorySummary');if(old)old.remove();const dl=document.createElement('button');dl.type='button';dl.id='mviappsDownloadLocalInventorySummary';dl.className='btn secondary';dl.style.marginTop='10px';dl.textContent='Download Aggregate Inventory Summary (JSON)';dl.onclick=function(){const blob=new Blob([JSON.stringify(summary,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='MVIApps_Local_Data_Inventory_Summary.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};document.getElementById('mviappsLocalMigrationInventory')?.appendChild(dl);
+  }catch(e){if(status)status.textContent='Inventory could not complete: '+(e?.message||String(e))+'. No data was changed.';}finally{if(button)button.disabled=false;}}
+ document.addEventListener('DOMContentLoaded',()=>{const b=document.getElementById('mviappsRunLocalMigrationInventory');if(b)b.addEventListener('click',run);});
+})();
+</script>
 </body></html>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{ try{mviappsBindBankModeSelector();}catch(e){} });
