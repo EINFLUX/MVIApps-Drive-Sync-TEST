@@ -10176,8 +10176,7 @@ html.mviapps-trial-locked #mviappsLoginOverlay{visibility:hidden!important;point
  async function createMigrationImport(kind,record,mutationId){
   if(!['bankAccounts','paymentIn','paymentOut','expenses','otherIncome'].includes(kind))throw new Error('Controlled Ver 4.5 import is limited to Bank Accounts, Payment-In, Payment-Out, Expense and Other Income.');
   const r=validateWrite(kind,record);
-  const ident=cloudIdentity||(readStaffSession()?await staffCloudSession():await api().ownerBootstrap());
-  if(ident?.mode!=='owner')throw new Error('Controlled Ver 4.5 migration import requires Owner sign-in.');
+  const ident=api().getIdentity?.();if(ident?.mode!=='owner')throw new Error('Controlled Ver 4.5 migration import requires Owner sign-in.');
   return api().businessDataRequest(routeFor(kind),{method:'POST',id:r.id,record:r,mutationId:checkedMutationId(mutationId),migrationMode:'ver45_import'});
  }
  async function update(kind,record,mutationId,expectedUpdatedAt=null){const r=validateWrite(kind,record);const request={method:'PUT',id:r.id,record:r,mutationId:checkedMutationId(mutationId)};if(['parties','items','godowns','bankAccounts','salesInvoices','salesReturns','purchaseInvoices','purchaseReturns'].includes(kind)){if(typeof expectedUpdatedAt!=='string'||!expectedUpdatedAt.trim()||expectedUpdatedAt.length>64)throw new Error(kind+' update requires the latest Cloud updatedAt; reload before saving');request.expectedUpdatedAt=expectedUpdatedAt;}return api().businessDataRequest(routeFor(kind),request);}
