@@ -8822,7 +8822,7 @@ return `<div class="page-head"><div><h1>Godown Management</h1><p>Manage storage 
 <section id="mviappsCloudGodownOwnerSetupPanel" class="panel" style="margin:0 0 16px;border:1px solid #c7d2fe;background:#f8faff">
  <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
   <div><b style="display:block;color:#1e3a8a">Production Cloud Godown Setup — Owner Only</b><span style="font-size:12px;color:#475569">Creates a separate Cloud Main Godown for Production stock records. Does not copy, read or modify Local Godowns, LocalStorage, IndexedDB or Google Drive Sync.</span></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary" id="mviappsCloudGodownRefresh" onclick="mviappsRefreshCloudGodowns()">Refresh Cloud Godowns</button><button type="button" class="btn" id="mviappsCloudGodownCreateMain" onclick="mviappsCreateCloudMainGodown()">Create Main Godown in Cloud</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary" id="mviappsCloudGodownRefresh" onclick="mviappsRefreshCloudGodowns()">Refresh Cloud Godowns</button><button type="button" class="btn" id="mviappsCloudGodownCreateMain" onclick="mviappsCreateCloudMainGodown()">Create Main Godown in Cloud</button><button type="button" class="btn" id="mviappsCloudGodownCreateORO" onclick="mviappsCreateCloudOROGodown()">Create ORO Logistics in Cloud</button></div>
  </div>
  <div id="mviappsCloudGodownSetupStatus" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;color:#475569">No Cloud setup action has been run. Sign in as Owner to create the Cloud Main Godown.</div>
  <div class="table-wrap" style="margin-top:10px"><table class="table"><thead><tr><th>Cloud Godown</th><th>Location</th><th>Cloud ID</th></tr></thead><tbody id="mviappsCloudGodownSetupRows"><tr><td colspan="3" class="empty">Select Refresh Cloud Godowns to inspect Cloud records.</td></tr></tbody></table></div>
@@ -11471,6 +11471,32 @@ document.addEventListener('keydown',function(e){
    const saved=verified.rows.find(x=>String(x.id)===record.id||String(x.record?.name||'').trim().toLowerCase()==='main godown');
    if(!saved)throw new Error('Create response was received, but Cloud read-back did not find Main Godown. Refresh before retrying; do not create another record.');
    say('PASS — Production Cloud Main Godown created and verified by read-back. Cloud ID: '+saved.id+'. Local Godown data and Drive Sync were not changed.');
+  }catch(e){say(e?.message||String(e),true);}
+  finally{busy=false;if(btn)btn.disabled=false;}
+ };
+ window.mviappsCreateCloudOROGodown=async function(){
+  if(busy)return;busy=true;const btn=document.getElementById('mviappsCloudGodownCreateORO');if(btn)btn.disabled=true;
+  try{
+   const {ident,rows}=await read();
+   if(ident.mode!=='owner')throw new Error('Only the Business Owner can create ORO Logistics in Production Cloud. Staff accounts are read-only here.');
+   const targetId='1788951466775';
+   const byId=rows.find(x=>String(x.id)===targetId);
+   const byName=rows.find(x=>String(x.record?.name||'').trim().toLowerCase()==='oro logistics');
+   if(byId||byName){
+    if(byId&&byName&&String(byId.id)===String(byName.id)&&String(byId.record?.name||'').trim().toLowerCase()==='oro logistics'){
+     say('ORO Logistics already exists in Production Cloud (ID: '+byId.id+'). No duplicate was created.');return;
+    }
+    throw new Error('Cloud ID or Godown name conflict detected. No create was attempted. Review the Cloud Godown list before proceeding.');
+   }
+   const main=rows.find(x=>String(x.record?.name||'').trim().toLowerCase()==='main godown');
+   if(!main||String(main.id)!=='main-godown-08cf7a97-30c5-4d12-94e2-943877854655')
+    throw new Error('Expected active Production Main Godown was not found. No ORO Logistics create was attempted.');
+   const record={id:targetId,name:'ORO Logistics',location:'Las Vegas'};
+   await bridge().create('godowns',record,'mviapps-godown-oro-'+crypto.randomUUID());
+   const verified=await read();
+   const saved=verified.rows.find(x=>String(x.id)===targetId&&String(x.record?.name||'').trim().toLowerCase()==='oro logistics');
+   if(!saved)throw new Error('Create response received, but read-back did not verify ORO Logistics. Do not retry; refresh and inspect Cloud records.');
+   say('PASS — ORO Logistics created and verified in Production Cloud. Cloud ID: '+saved.id+'. Location: Las Vegas. No stock, local Godown, Drive Sync, Cash or Bank balance was changed.');
   }catch(e){say(e?.message||String(e),true);}
   finally{busy=false;if(btn)btn.disabled=false;}
  };
