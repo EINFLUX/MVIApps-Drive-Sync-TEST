@@ -11488,9 +11488,13 @@ document.addEventListener('keydown',function(e){
     }
     throw new Error('Cloud ID or Godown name conflict detected. No create was attempted. Review the Cloud Godown list before proceeding.');
    }
-   const main=rows.find(x=>String(x.record?.name||'').trim().toLowerCase()==='main godown');
-   if(!main||String(main.id)!=='main-godown-08cf7a97-30c5-4d12-94e2-943877854655')
-    throw new Error('Expected active Production Main Godown was not found. No ORO Logistics create was attempted.');
+   const main=rows.find(x=>{
+    const name=String(x.record?.name||x.name||'').trim().toLowerCase();
+    const id=String(x.id||x.record?.id||'').trim();
+    return name==='main godown'&&id==='main-godown-08cf7a97-30c5-4d12-94e2-943877854655';
+   });
+   if(!main)
+    throw new Error('Expected active Production Main Godown was not found in the authenticated Cloud Godown list. No ORO Logistics create was attempted.');
    const record={id:targetId,name:'ORO Logistics',location:'Las Vegas'};
    await bridge().create('godowns',record,'mviapps-godown-oro-'+crypto.randomUUID());
    const verified=await read();
