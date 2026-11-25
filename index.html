@@ -1923,7 +1923,7 @@ body.appearance-compact .card,body.appearance-compact .panel{padding:16px}
       <button onclick="show('import-items',this)">Import Items</button><button onclick="show('export-items',this)">Export Items</button>
     </div></div>
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon utilities" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 8.5 4.8 4.8 0 0 0 7 18Z"/><path d="M12 16V9m-3 3 3-3 3 3"/></svg></span>Sync, Share &amp; Backup <span class="chev">⌄</span></button><div class="sub">
-      <button onclick="show('utilities',this)">Backup / Restore</button><button onclick="show('drive-sync',this)">Drive Sync</button><button onclick="show('data-safety',this)">System &amp; Data Safety</button><button onclick="show('delete-all-data',this)">Clear Local Business Data (This Browser)</button><button onclick="show('reset-production-cloud',this)">Reset Production Cloud Data</button>
+      <button onclick="show('utilities',this)">Backup / Restore</button><button onclick="show('drive-sync',this)">Drive Sync</button><button onclick="show('data-safety',this)">System &amp; Data Safety</button><button onclick="show('delete-all-data',this)">Delete All App Data</button>
     </div></div>
     <div class="group"><button onclick="toggle(this)"><span class="nav-icon plugins">🧩</span>Plugins <span class="chev">⌄</span></button><div class="sub">
       <button onclick="show('shipping-rates',this)">Shipping Rates &amp; Comparison</button>
@@ -3997,7 +3997,6 @@ function posReportPage(){
       </div>
     </div>
 
-    <div id="posReportCloudStatus" role="status" style="font-size:12px;color:#64748b;padding:8px 2px">Loading POS Sales from Production Cloud…</div>
     <div class="pr-result-card" id="posReportCard">
       <div class="pr-report-head"><div><div class="pr-report-title">POS Sales Summary</div><div class="muted pr-period" id="posReportPeriod"></div></div><div class="pr-total" id="posReportTotal"></div></div>
       <div class="pr-summary" id="posReportSummary"></div>
@@ -4009,45 +4008,34 @@ function posReportPage(){
   </div>`;
 }
 
-async function mviappsRunPOSReport(){
-  const status=document.getElementById('posReportCloudStatus');
-  const setStatus=(message,isError=false)=>{if(status){status.textContent=message;status.style.color=isError?'#b91c1c':'#64748b';}};
+function mviappsRunPOSReport(){
   const from=document.getElementById('posReportFrom')?.value||'';
   const to=document.getElementById('posReportTo')?.value||'';
   const mode=document.getElementById('posReportMode')?.value||'';
   const search=String(document.getElementById('posReportSearch')?.value||'').trim().toLowerCase();
-  try{
-    const bridge=window.mviappsCloudBusinessData;
-    if(!bridge?.readAll)throw new Error('Production Cloud data adapter is unavailable.');
-    setStatus('Loading complete POS invoice history from Production Cloud…');
-    const result=await bridge.readAll('salesInvoices',{pageSize:100,maxPages:100});
-    if(result?.complete!==true)throw new Error('Cloud Sales Invoice history is incomplete. Report totals are withheld until all pages are loaded.');
-    let rows=(result.records||[]).map(x=>({...x.record,id:String(x.id),updatedAt:x.updatedAt||null})).filter(x=>x&&String(x.notes||'').trim().toUpperCase()==='POS SALE');
-    rows=rows.filter(x=>{const d=String(x.date||'');if(from&&d<from)return false;if(to&&d>to)return false;if(mode&&String(x.paymentMode||'')!==mode)return false;if(search&&!(`${x.invoiceNo||''} ${x.customerName||x.partyName||''}`.toLowerCase().includes(search)))return false;return true;});
-    rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.invoiceNo||'').localeCompare(String(a.invoiceNo||'')));
-    const total=rows.reduce((s,x)=>s+(Number(x.totalAmount??x.total)||0),0);
-    const received=rows.reduce((s,x)=>s+(Number(x.amountReceived)||0),0);
-    const change=rows.reduce((s,x)=>s+(Number(x.changeAmount)||0),0);
-    const modeTotal=m=>rows.filter(x=>String(x.paymentMode||'')===m).reduce((s,x)=>s+(Number(x.totalAmount??x.total)||0),0);
-    const summary=document.getElementById('posReportSummary');
-    if(summary)summary.innerHTML=`<div class="pr-summary-card"><span>Total Bills</span><b>${rows.length}</b></div><div class="pr-summary-card"><span>Total POS Sales</span><b>${plMoney(total)}</b></div><div class="pr-summary-card"><span>Amount Received</span><b>${plMoney(received)}</b></div><div class="pr-summary-card"><span>Change Given</span><b>${plMoney(change)}</b></div><div class="pr-summary-card"><span>Average Bill</span><b>${plMoney(rows.length?total/rows.length:0)}</b></div>`;
-    const ps=document.getElementById('posReportPaymentSummary');
-    if(ps)ps.innerHTML=['Cash','UPI','Card','Bank','Credit'].map(m=>`<div class="pr-payment-card"><span>${m}</span><b>${plMoney(modeTotal(m))}</b></div>`).join('');
-    const tbody=document.querySelector('#posReportTable tbody');
-    const tfoot=document.querySelector('#posReportTable tfoot');
-    if(tbody)tbody.innerHTML=rows.map(x=>`<tr><td>${escapeHtml(String(x.date||'').split('-').reverse().join('/'))}</td><td>${escapeHtml(x.invoiceNo||'')}</td><td>${escapeHtml(x.customerName||x.partyName||'Walk-in / Cash Customer')}</td><td>${escapeHtml(x.paymentMode||'')}</td><td class="num">${plMoney(x.totalAmount??x.total)}</td><td class="num">${plMoney(x.amountReceived)}</td><td class="num">${plMoney(x.changeAmount)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No POS transactions found in Production Cloud for the selected filters.</td></tr>';
-    if(tfoot)tfoot.innerHTML=rows.length?`<tr><th colspan="4" class="num">Total</th><th class="num">${plMoney(total)}</th><th class="num">${plMoney(received)}</th><th class="num">${plMoney(change)}</th></tr>`:'';
-    const period=document.getElementById('posReportPeriod');if(period)period.textContent=reportPeriodLabel('posReport');
-    const totalEl=document.getElementById('posReportTotal');if(totalEl)totalEl.innerHTML=`${rows.length} Bill${rows.length===1?'':'s'} • ${plMoney(total)}`;
-    setStatus(`Production Cloud · ${result.records?.length||0} sales invoices read completely · ${rows.length} POS bills matched. No LocalStorage data used.`);
-  }catch(error){
-    const message=error?.message||String(error);setStatus('Cloud POS report unavailable — totals withheld. '+message,true);
-    const summary=document.getElementById('posReportSummary');if(summary)summary.innerHTML='<div class="pr-summary-card"><span>Report Status</span><b>Unavailable</b></div>';
-    const ps=document.getElementById('posReportPaymentSummary');if(ps)ps.innerHTML='';
-    const tbody=document.querySelector('#posReportTable tbody');if(tbody)tbody.innerHTML=`<tr><td colspan="7" class="empty">${escapeHtml(message)}</td></tr>`;
-    const tfoot=document.querySelector('#posReportTable tfoot');if(tfoot)tfoot.innerHTML='';
-    const totalEl=document.getElementById('posReportTotal');if(totalEl)totalEl.textContent='Cloud data unavailable';
-  }
+  let rows=JSON.parse(localStorage.getItem('mviapps_sales_invoices')||'[]').filter(x=>x && String(x.notes||'')==='POS Sale');
+  rows=rows.filter(x=>{const d=String(x.date||'');if(from&&d<from)return false;if(to&&d>to)return false;if(mode&&String(x.paymentMode||'')!==mode)return false;if(search&&!(`${x.invoiceNo||''} ${x.customerName||''}`.toLowerCase().includes(search)))return false;return true;});
+  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.invoiceNo||'').localeCompare(String(a.invoiceNo||'')));
+  const total=rows.reduce((s,x)=>s+(Number(x.total)||0),0);
+  const received=rows.reduce((s,x)=>s+(Number(x.amountReceived)||0),0);
+  const change=rows.reduce((s,x)=>s+(Number(x.changeAmount)||0),0);
+  const cash=rows.filter(x=>x.paymentMode==='Cash').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const upi=rows.filter(x=>x.paymentMode==='UPI').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const card=rows.filter(x=>x.paymentMode==='Card').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const bank=rows.filter(x=>x.paymentMode==='Bank').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const credit=rows.filter(x=>x.paymentMode==='Credit').reduce((s,x)=>s+(Number(x.total)||0),0);
+  const summary=document.getElementById('posReportSummary');
+  if(summary)summary.innerHTML=`<div class="pr-summary-card"><span>Total Bills</span><b>${rows.length}</b></div><div class="pr-summary-card"><span>Total POS Sales</span><b>${plMoney(total)}</b></div><div class="pr-summary-card"><span>Amount Received</span><b>${plMoney(received)}</b></div><div class="pr-summary-card"><span>Change Given</span><b>${plMoney(change)}</b></div><div class="pr-summary-card"><span>Average Bill</span><b>${plMoney(rows.length?total/rows.length:0)}</b></div>`;
+  const ps=document.getElementById('posReportPaymentSummary');
+  if(ps)ps.innerHTML=`<div class="pr-payment-card"><span>Cash</span><b>${plMoney(cash)}</b></div><div class="pr-payment-card"><span>UPI</span><b>${plMoney(upi)}</b></div><div class="pr-payment-card"><span>Card</span><b>${plMoney(card)}</b></div><div class="pr-payment-card"><span>Bank</span><b>${plMoney(bank)}</b></div><div class="pr-payment-card"><span>Credit</span><b>${plMoney(credit)}</b></div>`;
+  const tbody=document.querySelector('#posReportTable tbody');
+  const tfoot=document.querySelector('#posReportTable tfoot');
+  if(tbody)tbody.innerHTML=rows.map(x=>`<tr><td>${escapeHtml(String(x.date||'').split('-').reverse().join('/'))}</td><td>${escapeHtml(x.invoiceNo||'')}</td><td>${escapeHtml(x.customerName||'Walk-in / Cash Customer')}</td><td>${escapeHtml(x.paymentMode||'')}</td><td class="num">${plMoney(x.total)}</td><td class="num">${plMoney(x.amountReceived)}</td><td class="num">${plMoney(x.changeAmount)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No POS transactions found for the selected filters.</td></tr>';
+  if(tfoot)tfoot.innerHTML=rows.length?`<tr><th colspan="4" class="num">Total</th><th class="num">${plMoney(total)}</th><th class="num">${plMoney(received)}</th><th class="num">${plMoney(change)}</th></tr>`:'';
+  const period=document.getElementById('posReportPeriod');
+  if(period)period.textContent=reportPeriodLabel('posReport');
+  const totalEl=document.getElementById('posReportTotal');
+  if(totalEl)totalEl.innerHTML=`${rows.length} Bill${rows.length===1?'':'s'} • ${plMoney(total)}`;
 }
 
 function initPOSReport(){
@@ -4056,7 +4044,7 @@ function initPOSReport(){
   setReportDateValues('posReport',start+'-04-01',(start+1)+'-03-31');
   if(document.getElementById('posReportMode'))document.getElementById('posReportMode').value='';
   if(document.getElementById('posReportSearch'))document.getElementById('posReportSearch').value='';
-  return mviappsRunPOSReport();
+  mviappsRunPOSReport();
 }
 
 function mviappsPrintPOSReport(){
@@ -4479,8 +4467,7 @@ expenses:{title:"Expenses",sub:"Record and manage business expenses",html:expens
 "drive-sync":{title:"Drive Sync",sub:"Safe multi-device Google Drive synchronization",html:driveSyncTestPage()},utilities:{title:"Backup / Restore",sub:"Protect your business data",html:utility()},
 "shipping-rates":{title:"Shipping Rates & Comparison",sub:"Manage shipping rate sheets and compare courier costs",html:shippingRatesPage()},
 "data-safety":{title:"System & Data Safety",sub:"Backup reminders, browser guidance and data protection",html:dataSafetyPage()},
-"delete-all-data":{title:"Delete All App Data",sub:"Permanently remove all saved app data on this browser",html:deleteAllDataPage()},
-"reset-production-cloud":{title:"Reset Production Cloud Data",sub:"Owner-only one-time reset of Production business records",html:resetProductionCloudDataPage()},
+"delete-all-data":{title:"Delete All App Data",sub:"Permanently remove all saved app data",html:deleteAllDataPage()},
 company:{title:"Company Details",sub:"Business identity, contact, tax and address information",html:companySettings()},
 "invoice-settings":{title:"Invoice Settings",sub:"Control invoice numbering, format, bank details and terms",html:invoiceSettings()},
 "tax-settings":{title:"Tax Settings",sub:"Configure GST registration, rates and tax behavior",html:taxSettings()},
@@ -6509,7 +6496,6 @@ function posQuickItemEntry(){
 
 function posAddItem(itemId){if(!mviappsRequireStaffPermission('sales','create'))return;
   const item=posGetItems().find(i=>String(i.id)===String(itemId));if(!item)return;
-  if(window._mviPOSCloudContext?.stockVerified!==true){const e=window._mviPOSCloudContext?.stockError;alert('Cloud Item is available, but authoritative stock is not verified. POS cannot add or sell this item yet.'+(e?.code?'\nCode: '+e.code:'')+(e?.message?'\n'+e.message:''));return;}
   const available=posFindStock(itemId);
   if(available<=0){alert(`No stock available for ${item.name||'this item'}.`);return;}
   const body=document.getElementById('posItemsBody');if(!body)return;
@@ -6929,8 +6915,37 @@ async function savePOSBill(){
     let pendingCheckout=window._mviPOSPendingCheckout||null;
     if(!pendingCheckout){try{pendingCheckout=JSON.parse(sessionStorage.getItem('mviapps_pos_pending_cloud_checkout')||'null');}catch{pendingCheckout=null;}}
     if(pendingCheckout?.mutationId&&pendingCheckout?.record?.id){
-      if(posGetRows().length)throw new Error('A previous POS checkout is awaiting confirmation. First clear the visible POS draft without changing it, then press Save to retry the exact pending Cloud request safely.');
-      const retry=await window.mviappsProductionCloud.businessDataRequest('/business/pos/checkout',{method:'POST',id:pendingCheckout.record.id,record:pendingCheckout.record,mutationId:pendingCheckout.mutationId});
+      // A failed/uncertain network response leaves the exact checkout in sessionStorage.
+      // Permit retry while the same bill is still visible, but never retry over a changed bill.
+      const pendingRecord=pendingCheckout.record;
+      const visibleRows=posGetRows();
+      if(visibleRows.length){
+        const visibleItems=visibleRows.map(tr=>({
+          itemId:String(tr.dataset.itemId||''),
+          qty:Number(tr.querySelector('.pos-row-qty')?.value)||0,
+          rate:Number(tr.querySelector('.pos-row-rate')?.value)||0,
+          discount:Number(tr.querySelector('.pos-row-disc')?.value)||0
+        })).sort((a,b)=>a.itemId.localeCompare(b.itemId));
+        const pendingItems=(pendingRecord.items||[]).map(it=>({
+          itemId:String(it.itemId||''),
+          qty:Number(it.qty)||0,
+          rate:Number(it.rate)||0,
+          discount:Number(it.discount)||0
+        })).sort((a,b)=>a.itemId.localeCompare(b.itemId));
+        const sameItems=JSON.stringify(visibleItems)===JSON.stringify(pendingItems);
+        const visibleDate=document.getElementById('posDate')?.value||'';
+        const visibleMode=document.getElementById('posPaymentMode')?.value||'Cash';
+        const visibleCustomer=document.getElementById('posCustomer')?.value||'';
+        const visibleReceived=Number(document.getElementById('posAmountReceived')?.value)||0;
+        const visibleReference=document.getElementById('posReference')?.value.trim()||'';
+        const sameHeader=visibleDate===String(pendingRecord.date||'')
+          && visibleMode===String(pendingRecord.paymentMode||'Cash')
+          && visibleCustomer===String(pendingRecord.customer||'')
+          && Math.abs(visibleReceived-Number(pendingRecord.amountReceived||0))<0.000001
+          && visibleReference===String(pendingRecord.reference||'');
+        if(!sameItems||!sameHeader)throw new Error('A previous POS checkout is awaiting confirmation, and the visible bill differs from that exact request. Do not save this changed bill. Restore the original bill or verify Cloud Bill History first.');
+      }
+      const retry=await window.mviappsProductionCloud.businessDataRequest('/business/pos/checkout',{method:'POST',id:pendingRecord.id,record:pendingRecord,mutationId:pendingCheckout.mutationId});
       if(retry?.saved!==true||retry?.atomic!==true)throw new Error('Pending POS checkout is not yet confirmed. Keep the original bill unchanged and retry/verify Cloud history.');
       window._mviPOSPendingCheckout=null;try{sessionStorage.removeItem('mviapps_pos_pending_cloud_checkout');}catch{}
       alert('Pending POS checkout was confirmed in Production Cloud.');posPrintBill(pendingCheckout.record);await mviPOSLoadCloudContext();clearPOSBill();return;
@@ -6976,45 +6991,24 @@ async function savePOSBill(){
 async function mviPOSLoadCloudContext(){
   const bridge=window.mviappsCloudBusinessData,cloud=window.mviappsProductionCloud;
   if(!bridge?.readAll||!cloud?.posStockSnapshot)throw new Error('Production Cloud POS adapter is unavailable.');
-  // Load the Cloud masters independently of the stock preflight. A stock snapshot
-  // failure must not hide valid Cloud Items from the POS search; it must only block
-  // adding/checkout until the authoritative balance is verified.
-  const [items,parties,godowns,bankAccounts,salesInvoices]=await Promise.all([
+  const [items,parties,godowns,bankAccounts,salesInvoices,snapshot]=await Promise.all([
     bridge.readAll('items',{pageSize:75,maxPages:100}),
     bridge.readAll('parties',{pageSize:100,maxPages:100}),
     bridge.readAll('godowns',{pageSize:100,maxPages:20}),
     bridge.readAll('bankAccounts',{pageSize:100,maxPages:20}),
-    bridge.readAll('salesInvoices',{pageSize:100,maxPages:100})
+    bridge.readAll('salesInvoices',{pageSize:100,maxPages:100}),
+    cloud.posStockSnapshot()
   ]);
   for(const [name,result] of Object.entries({items,parties,godowns,bankAccounts,salesInvoices}))if(result.complete!==true)throw new Error('Cloud '+name+' list is incomplete. POS remains read-only until a complete refresh succeeds.');
   const unwrap=r=>(r.records||[]).map(x=>({...x.record,id:String(x.id),updatedAt:x.updatedAt||null}));
-  const context={items:unwrap(items),parties:unwrap(parties),godowns:unwrap(godowns),bankAccounts:unwrap(bankAccounts),salesInvoices:unwrap(salesInvoices),balances:[],loadedAt:null,stockVerified:false,stockError:null,mastersLoadedAt:new Date().toISOString()};
-  window._mviPOSCloudContext=context;
-  try{
-    const snapshot=await cloud.posStockSnapshot();
-    if(!snapshot||!Array.isArray(snapshot.balances)||!Array.isArray(snapshot.godowns))throw Object.assign(new Error('Worker returned an incomplete authoritative stock snapshot.'),{code:'INVALID_STOCK_SNAPSHOT_RESPONSE'});
-    context.balances=snapshot.balances;
-    context.loadedAt=snapshot.loadedAt||new Date().toISOString();
-    context.stockVerified=true;
-  }catch(snapshotError){
-    context.stockError={message:snapshotError?.message||String(snapshotError),code:snapshotError?.code||'STOCK_SNAPSHOT_FAILED',status:snapshotError?.status||null};
-    console.error('[MVIApps POS STOCK SNAPSHOT ERROR]',snapshotError);
-  }
-  window._mviPOSCloudContext=context;
-  return context;
+  window._mviPOSCloudContext={items:unwrap(items),parties:unwrap(parties),godowns:unwrap(godowns),bankAccounts:unwrap(bankAccounts),salesInvoices:unwrap(salesInvoices),balances:snapshot.balances||[],loadedAt:snapshot.loadedAt};
+  return window._mviPOSCloudContext;
 }
 function initPointOfSale(){
   posLoadCustomers();posLoadBankAccounts();posPaymentModeChanged();posRefreshNumbers();
   const status=document.getElementById('posCloudStatus');
-  if(status)status.textContent='Refreshing Production Cloud Item Master and stock…';
-  mviPOSLoadCloudContext().then(context=>{
-    posLoadCustomers();posLoadBankAccounts();renderPOSItemSuggestions();posRefreshNumbers();
-    if(status){
-      if(context.stockVerified)status.textContent='Connected to Production Cloud · Item Master loaded · Authoritative Godown stock verified';
-      else status.textContent='Cloud Items loaded ('+context.items.length+'), but stock verification failed ['+context.stockError.code+']: '+context.stockError.message+' · POS saving remains disabled.';
-    }
-    if(!context.stockVerified)console.warn('[MVIApps POS] Stock preflight unavailable; checkout remains blocked.',context.stockError);
-  }).catch(error=>{if(status)status.textContent='Cloud Item Master unavailable — POS saving is disabled. '+(error?.code?('['+error.code+'] '):'')+(error?.message||'');console.error('[MVIApps POS Cloud]',error);});
+  if(status)status.textContent='Refreshing Production Cloud data…';
+  mviPOSLoadCloudContext().then(()=>{if(status)status.textContent='Connected to Production Cloud · Stock checked from authoritative Godown balances';posLoadCustomers();posLoadBankAccounts();renderPOSItemSuggestions();posRefreshNumbers();}).catch(error=>{if(status)status.textContent='Cloud unavailable — POS saving is disabled. '+(error?.message||'');console.error('[MVIApps POS Cloud]',error);});
   document.getElementById('posItemSearch')?.focus();
   document.removeEventListener('keydown',mviPOSKeyHandler);
   document.addEventListener('keydown',mviPOSKeyHandler);
@@ -9173,24 +9167,9 @@ async function restoreFullBackup(input){
 function dataSafetyPage(){return `<div class="page-head"><div><h1>System & Data Safety</h1><p>Important guidance to keep your MVIApps data safe on your computer or tablet.</p></div></div><div class="panel" style="max-width:900px"><div class="section" style="margin-top:0">Backup Status</div><div id="backupStatus" style="margin:8px 0 16px;color:var(--muted)">Checking backup status...</div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="createFullBackup();renderDataSafety()">Create Backup Now</button><button class="btn secondary" onclick="show('utilities')">Open Backup / Restore</button></div></div><div class="grid2" style="margin-top:18px"><div class="panel"><div class="section" style="margin-top:0">Recommended Setup</div><ul style="line-height:1.9;color:var(--muted);padding-left:20px"><li>Use an updated Chrome, Edge or Firefox browser.</li><li>Keep using the same browser/profile for regular work.</li><li>Do not clear browser/site data unless you have a backup.</li><li>Before changing computers, create a Full Backup.</li><li>On the new computer, use Restore All Data to bring your records back.</li></ul></div><div class="panel"><div class="section" style="margin-top:0">Data Safety Tips</div><ul style="line-height:1.9;color:var(--muted);padding-left:20px"><li>Keep at least one backup outside the browser, such as a USB drive or secure folder.</li><li>Take a backup before major data changes or software/browser maintenance.</li><li>For important records, keep more than one backup copy.</li><li>Never share backup files publicly because they may contain business data.</li></ul></div></div><div class="panel" style="margin-top:18px"><div class="section" style="margin-top:0">App Information</div><div class="formgrid"><div class="field"><label>Application</label><input class="input" value="MVIApps" readonly></div><div class="field"><label>Storage</label><input class="input" value="Browser Local Storage" readonly></div><div class="field"><label>Internet Required for Normal Use</label><input class="input" value="No — app data is stored locally" readonly></div><div class="field"><label>Backup Format</label><input class="input" value="JSON Full Backup" readonly></div></div></div>`}
 function renderDataSafety(){const el=document.getElementById('backupStatus');if(!el)return;const raw=localStorage.getItem('mviapps_lastBackupAt');if(!raw){el.innerHTML='<b style="color:#b91c1c">No backup recorded yet.</b> Create a backup now to protect your data.';return}const d=new Date(raw);const age=Math.floor((Date.now()-d.getTime())/86400000);const label=isNaN(d.getTime())?'Unknown':d.toLocaleString();el.innerHTML=`Last backup: <b>${escapeHtml(label)}</b>${age>=7?' <span style="color:#b91c1c">— It has been 7 or more days; a fresh backup is recommended.</span>':' <span style="color:#15803d">— Backup record is recent.</span>'}`}
 
-function resetProductionCloudDataPage(){return `<div class="page-head"><div><h1>Reset Production Cloud Data</h1><p>Clear all business records from the Production Cloud while keeping the Business identity and Owner login.</p></div></div><div class="panel" style="border:1px solid #dc2626;border-radius:12px;padding:24px;max-width:820px"><h2 style="margin-top:0;color:#b91c1c">Permanent Production Cloud Reset</h2><p><strong>This is different from “Delete All App Data (This Browser)”.</strong> It clears Production Cloud records for this Business only.</p><ul><li>Deletes Parties, Items, invoices, returns, payments, expenses, other income, all bank accounts and bank/cash transactions.</li><li>Deletes opening balances, accounting journals, payment allocations, stock events/state, stock adjustments, godowns and transfers.</li><li>Deletes staff login accounts/sessions, invitations and non-Owner business memberships.</li><li>Keeps Business ID, Business identity, your Owner login and Owner membership, D1 schema/indexes/triggers and Worker/Firebase configuration.</li></ul><p style="color:#991b1b;font-weight:700">Cannot be undone. Ensure your backup is safely stored before proceeding.</p><label for="mviappsResetCloudConfirm" style="display:block;font-weight:700;margin:14px 0 6px">Type exactly: RESET PRODUCTION DATA</label><input id="mviappsResetCloudConfirm" type="text" autocomplete="off" style="width:100%;max-width:440px;padding:11px;border:1px solid #cbd5e1;border-radius:8px" placeholder="RESET PRODUCTION DATA"><div style="margin-top:16px"><button class="btn" id="mviappsResetCloudButton" style="background:#dc2626;color:#fff" onclick="mviappsExecuteProductionCloudReset()">Reset Production Cloud Data</button></div><div id="mviappsResetCloudStatus" role="status" style="margin-top:14px;white-space:pre-wrap"></div></div>`}
-async function mviappsExecuteProductionCloudReset(){
- const input=document.getElementById('mviappsResetCloudConfirm'),button=document.getElementById('mviappsResetCloudButton'),status=document.getElementById('mviappsResetCloudStatus');
- if(!input||input.value.trim()!=='RESET PRODUCTION DATA'){if(status)status.textContent='Confirmation text does not match. No data was changed.';return;}
- const identity=window.mviappsProductionCloud?.getIdentity?.();
- if(!identity||identity.mode!=='owner'||identity.business?.role!=='Owner'){if(status)status.textContent='Owner Production sign-in is required. No data was changed.';return;}
- if(!confirm('FINAL WARNING: Permanently delete all Production Cloud business records for '+(identity.business.name||identity.business.id)+'? Your Business ID and Owner login will remain.'))return;
- if(button)button.disabled=true;if(status)status.textContent='Submitting secure Owner-only reset. Do not close this page…';
- try{
-  const result=await window.mviappsProductionCloud.resetProductionBusinessData('RESET PRODUCTION DATA');
-  if(!result?.success)throw new Error(result?.error||'Reset was not confirmed by the Production Worker.');
-  if(status)status.textContent='SUCCESS — Production Cloud business data has been cleared and verified.\nBusiness ID preserved: '+result.businessId+'\n\nDeleted row counts (before reset):\n'+Object.entries(result.before||{}).map(([k,v])=>k+': '+v).join('\n')+'\n\nRemaining rows in key collections: all zero.\nOwner login and Business identity preserved.';
-  input.value='';
- }catch(error){if(status)status.textContent='RESET NOT CONFIRMED: '+(error?.message||String(error))+'\nCheck Worker deployment/logs before retrying. Do not assume data was deleted.';}
- finally{if(button)button.disabled=false;}
-}
-function deleteAllDataPage(){return `<div class="page-head"><div><h1>Clear Local Business Data</h1><p>Remove old business records from this browser only. Production Cloud data is not changed.</p></div></div><div class="panel" style="border:1px solid #ef4444;border-radius:12px;padding:24px;max-width:760px"><h2 style="margin-top:0;color:#b91c1c">⚠ Clear Local Business Data</h2><p>This removes old local Parties, Items, invoices, returns, payments, expenses, income, bank/cash records, stock/godown data and local company profile fields. It also clears locally stored item images.</p><p><strong>Preserved:</strong> Firebase/Owner login, Production Cloud configuration, Google Drive connection metadata, and UI preferences such as theme, font size and layout.</p><p><strong>This action cannot be undone.</strong> Your separate Ver 4.5 backup remains unaffected. This operation does not delete Production Cloud records.</p><button class="btn" style="background:#dc2626;color:#fff" onclick="deleteAllAppData()">Clear Local Business Data</button></div><div id="mviappsLocalResetStatus" role="status" style="margin-top:12px"></div>`}
-async function deleteAllAppData(){if(!confirm('WARNING: Permanently clear old LOCAL business data from this browser? Production Cloud and Owner login will not be changed. Continue?'))return;const confirmation=prompt('To confirm local business data deletion, type CLEAR LOCAL DATA in capital letters:');if(confirmation!=='CLEAR LOCAL DATA'){alert('Deletion cancelled. Required confirmation was not entered.');return;}const preserve=new Set(['mviapps_accentColor','mviapps_compactLayout','mviapps_drive_sync_client','mviapps_drive_sync_last_cloud_hash','mviapps_drive_sync_last_cloud_revision','mviapps_drive_sync_last_device','mviapps_drive_sync_last_local_hash','mviapps_fontSize','mviapps_sidebarPosition','mviapps_theme']);const removed=[];for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith('mviapps_')&&!preserve.has(k)){localStorage.removeItem(k);removed.push(k);}}window._editingSaleId=null;window._editingPurchaseId=null;window._editingExpenseId=null;let images='not available';try{await new Promise((resolve,reject)=>{const req=indexedDB.deleteDatabase('mviapps_high_storage_v1');req.onsuccess=()=>{images='cleared';resolve();};req.onerror=()=>reject(req.error||new Error('IndexedDB delete failed'));req.onblocked=()=>reject(new Error('Close other MVIApps tabs and retry; item-image database is in use.'));});}catch(e){images='not cleared: '+(e?.message||String(e));}const status=document.getElementById('mviappsLocalResetStatus');const message='Local business data cleared. Removed '+removed.length+' local storage keys. Item image storage: '+images+'. Owner login, Production Cloud settings, Drive connection metadata and UI preferences were preserved. Production Cloud was not changed.';if(status)status.textContent=message;alert(message);show('dashboard');}
+function deleteAllDataPage(){return `<div class="page-head"><div><h1>Delete All App Data</h1><p>Permanently delete all data saved by this app on this browser.</p></div></div><div class="panel" style="border:1px solid #ef4444;border-radius:12px;padding:24px;max-width:760px"><h2 style="margin-top:0;color:#b91c1c">⚠ Delete All App Data</h2><p>This will delete all saved app data including parties, items, sales, purchases, purchase returns, payments, expenses, other income, stock movements and settings stored by this app.</p><p><strong>This action cannot be undone.</strong> Please take a backup before continuing.</p><button class="btn" style="background:#dc2626;color:#fff" onclick="deleteAllAppData()">Delete All App Data</button></div>`}
+function deleteAllAppData(){if(!confirm('WARNING: This will permanently delete ALL data saved by the mviapps app on this browser. Continue?'))return;const confirmation=prompt('To confirm permanent deletion, type DELETE in capital letters:');if(confirmation!=='DELETE'){alert('Deletion cancelled. The required confirmation was not entered.');return;}const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('mviapps_'))keys.push(k)}keys.forEach(k=>localStorage.removeItem(k));window._editingSaleId=null;window._editingPurchaseId=null;window._editingExpenseId=null;alert('All mviapps app data has been deleted successfully.');cleanupDuplicateICICIBank();
+migrateItemsToIndexedDB().then(()=>show('dashboard')).catch(()=>show('dashboard'));}
 function escapeHtml(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
 function fields(label,placeholder){
   if(Array.isArray(label)) return label.map(x=>`<div class="field"><label>${x}</label><input placeholder="Enter ${String(x).replace(' *','').toLowerCase()}"></div>`);
@@ -9903,7 +9882,7 @@ function mviappsStaffPagePermission(id){
   'security':['settings','view'],'shipping-rates':['settings','view'],
   'tax-settings':['settings','view'],'utilities':['settings','view'],
   // Owner-only pages: no Staff permission can grant access to these controls
-  'data-safety':['ownerOnly','view'],'delete-all-data':['ownerOnly','view'],'reset-production-cloud':['ownerOnly','view'],
+  'data-safety':['ownerOnly','view'],'delete-all-data':['ownerOnly','view'],
   'drive-sync':['ownerOnly','view'],
   // Reports
   'report-all-parties':['reports','view'],'report-all-transactions':['reports','view'],
@@ -10977,12 +10956,6 @@ async function businessDataRequest(route,{method='GET',record=null,id='',mutatio
 window.mviappsProductionCloud={
  ownerBootstrap,ownerSignOut,staffLogin:staffCloudLogin,staffSession:staffCloudSession,staffChangePassword,staffLogout:staffCloudLogout,
  staffAccountsList,staffAccountCreate,staffAccountStatus,staffAccountResetPassword,
- async resetProductionBusinessData(confirmation){
-  const identity=cloudIdentity||(readStaffSession()?await staffCloudSession():await ownerBootstrap());
-  if(identity.mode!=='owner'||identity.business?.role!=='Owner')throw new Error('Canonical Production Owner sign-in is required.');
-  const bid=identity.business?.id;if(!bid)throw new Error('Production Business ID is missing.');
-  return cloudRequest('/business/admin/reset-business-data',{method:'POST',body:{confirmation},mode:'owner',businessId:bid});
- },
  staffAccountPermissionsGet,staffAccountPermissionsSave,
  businessDataRequest,
  async posStockSnapshot(){
@@ -12120,7 +12093,7 @@ document.addEventListener('keydown',function(e){
   if(journal.error)html+=`<p style="color:#b91c1c">Not available: ${esc(journal.error)}</p>`;
   else html+=`<p>Read-only journal lines: <b>${journal.lines.length}</b> · Debits: <b>${esc(journal.totals?.debitsPaise??0)} paise</b> · Credits: <b>${esc(journal.totals?.creditsPaise??0)} paise</b></p>`;
   html+='</section>';
-  html+=`<div style="padding:12px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;color:#92400e;font-size:12px"><b>Scope note:</b> These counts confirm Cloud source availability only. They do not yet certify report calculations. POS Sales is reported from the complete Cloud Sales Invoice collection filtered to POS Sale source records. No local records are read or changed.</div>`;
+  html+=`<div style="padding:12px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;color:#92400e;font-size:12px"><b>Scope note:</b> These counts confirm Cloud source availability only. They do not yet certify report calculations. POS Sales has no dedicated Cloud POS collection/route in the inspected Production Worker. No local records were read or changed.</div>`;
   root.innerHTML=html;
  }
  window.mviappsRunCloudReportsReadOnly=async function(){
